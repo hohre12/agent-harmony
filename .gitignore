@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+runtime/.venv/
+
+# Runtime state (user-specific)
+.harmony/
+
+# Local guide (not for public)
+LOCAL_GUIDE.md
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test cache
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/

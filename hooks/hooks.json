@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Check if the 'frontend-design' plugin is available by looking for frontend design skills. If the project involves frontend/UI work (check for package.json with React/Next.js/Vue, or docs/prd.md mentioning UI/frontend), and the frontend-design plugin is not installed, inform the user: 'Tip: Install the frontend-design plugin for better UI quality: /plugin install frontend-design@claude-plugins-official'. Do NOT block — just inform once."
+          }
+        ]
+      }
+    ]
+  }
+}

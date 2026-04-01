@@ -1,0 +1,52 @@
+"""Step-specific prompts for the harmony pipeline.
+
+Split by domain to keep each file short and focused:
+  interview.py  — interview questions, PRD generation/review
+  setup.py      — project init, agent gen, build refs, task gen
+  build.py      — task execution, fix issues, escalation
+  quality.py    — quality gate, production audit
+  security.py   — security review, hardening
+  delivery.py   — verify, final check, summary, resume
+"""
+
+from harmony.orchestrator.prompts.interview import (
+    interview_start,
+    interview_question,
+    generate_prd,
+    prd_review,
+)
+from harmony.orchestrator.prompts.setup import (
+    setup_step,
+    generate_tasks,
+    setup_team_executor,
+)
+from harmony.orchestrator.prompts.build import (
+    build_task,
+    fix_issues,
+    escalation,
+)
+from harmony.orchestrator.prompts.quality import (
+    quality_gate,
+    production_audit,
+)
+from harmony.orchestrator.prompts.security import (
+    harden_security_review,
+    harden_fix_criticals,
+)
+from harmony.orchestrator.prompts.delivery import (
+    verify_prd_compliance,
+    verify_fix_gaps,
+    final_check,
+    delivery_summary,
+    resume_prompt,
+)
+
+__all__ = [
+    "interview_start", "interview_question", "generate_prd", "prd_review",
+    "setup_step", "generate_tasks", "setup_team_executor",
+    "build_task", "fix_issues", "escalation",
+    "quality_gate", "production_audit",
+    "harden_security_review", "harden_fix_criticals",
+    "verify_prd_compliance", "verify_fix_gaps",
+    "final_check", "delivery_summary", "resume_prompt",
+]

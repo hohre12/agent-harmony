@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "harmony": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/runtime/setup.sh",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/runtime/mcp_server.py"]
+    }
+  }
+}

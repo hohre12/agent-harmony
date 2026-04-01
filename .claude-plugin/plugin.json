@@ -1,0 +1,12 @@
+{
+  "name": "agent-harmony",
+  "description": "One prompt to production. Multi-pass quality assurance for autonomous AI development.",
+  "version": "4.0.0",
+  "author": {
+    "name": "hohre12",
+    "email": "hohre12@gmail.com"
+  },
+  "homepage": "https://github.com/hohre12/agent-harmony",
+  "repository": "https://github.com/hohre12/agent-harmony",
+  "license": "MIT"
+}
