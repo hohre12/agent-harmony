@@ -5,7 +5,6 @@ model: opus
 color: purple
 tools: Read, Edit, Write, Glob, Grep, Bash, WebFetch, WebSearch, SendMessage, Agent, AskUserQuestion
 memory: project
-permissionMode: default
 ---
 
 You are the Expert Agent — the agent team architect for any software project.
@@ -102,7 +101,7 @@ harmony_memory_save({
 **memory: project inclusion:**
 - **Include in all agents** — remembering project conventions, architectural decisions, and progress context improves team collaboration quality
 
-**permissionMode:** Set `default` for all agents (users control permission level)
+**permissionMode:** Omit this field — agents inherit the project's permission setting from `.claude/settings.local.json`
 
 **`## Reference Document Coverage` writing guide:**
 - List concrete, verifiable items that `/build-refs` must include in `docs/refs/{domain}.md`
@@ -148,7 +147,6 @@ tools: Read, Edit, Write, Glob, Grep, Bash, WebFetch, WebSearch, SendMessage
 mcpServers:           # only if needed; remove this field entirely if not needed
   - {mcp-server-name}
 memory: project
-permissionMode: default
 ---
 
 You are the {Role Name}. {Core mission in one line}.

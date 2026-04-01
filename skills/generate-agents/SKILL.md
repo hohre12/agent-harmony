@@ -46,7 +46,7 @@ For each agent, include the following:
     opus: architecture/orchestration, security/review, AI/ML (roles where complex judgment, reasoning, and coordination are key)
     sonnet: backend/frontend implementation, DB/infrastructure, testing/QA, design/UI (roles focused on implementation, generation, and repetitive tasks)
 - memory: `project` (always included for all agents)
-- permissionMode: default
+- Do NOT include `permissionMode` in agent files — agents inherit from project settings
 - constraints: things the agent must never do
 - related_agents: other agents it collaborates with
 - conventions: concrete conventions for the agent's technical domain, extracted from PRD/architecture.md
@@ -101,7 +101,6 @@ tools: Read, Edit, Write, Glob, Grep, Bash, WebFetch, WebSearch, SendMessage
 mcpServers:           # only if needed; remove this field entirely if not needed
   - {mcp-server-name}
 memory: project
-permissionMode: default
 ---
 
 You are the {Role Name}. {Core mission in one line}.
@@ -229,7 +228,7 @@ harmony_memory_save({
 
 **Include in all agents** — remembering project conventions, architectural decisions, and progress context improves team collaboration quality.
 
-> All agents must include a `## Memory` section (placed after role description, before `## Reference Documents`) with mandatory save instructions to `.claude/agent-memory/{role}-agent/MEMORY.md`.
+> All agents must include a `## Memory` section (placed after role description, before `## Reference Documents`) with mandatory save instructions using `harmony_memory_save` MCP tool. Do NOT use markdown files in `.claude/agent-memory/` — always use the MCP tool.
 
 **Read-Only agents (analysis only, no implementation):**
 - `tools`: `Read, Glob, Grep, Bash, WebFetch, WebSearch, SendMessage` (no Write/Edit)
