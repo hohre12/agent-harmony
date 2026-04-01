@@ -50,7 +50,7 @@ For each task:
 ```bash
 # Add marketplace & install plugin
 /plugin marketplace add hohre12/jwbae-plugins
-/plugin install agent-harmony
+/plugin install agent-harmony@jwbae-plugins
 
 # Build something
 /agent-harmony:run a todo app with authentication and team collaboration
@@ -205,7 +205,7 @@ Multi-pass quality ensures everything is production-grade.
 
 ```bash
 # Install as Claude Code plugin
-/plugin install agent-harmony
+/plugin install agent-harmony@jwbae-plugins
 
 # Or manually
 git clone https://github.com/hohre12/agent-harmony ~/.claude/plugins/agent-harmony
