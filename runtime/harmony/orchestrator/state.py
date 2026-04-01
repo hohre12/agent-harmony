@@ -21,9 +21,9 @@ DEFAULT_QUALITY_THRESHOLDS: dict = {
     "build": True,              # Must compile / build successfully
     "tests": True,              # All tests must pass
     "lint": True,               # Zero lint errors (warnings OK)
-    "test_coverage": 60.0,      # Minimum test coverage %
-    "max_file_lines": 500,      # No single file exceeds this
-    "max_function_lines": 80,   # No single function exceeds this
+    "test_coverage": 70.0,      # Minimum test coverage % (production level)
+    "max_file_lines": 400,      # No single file exceeds this
+    "max_function_lines": 60,   # No single function exceeds this
     "security_critical": 0,     # Zero critical security issues
 }
 

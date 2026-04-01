@@ -118,9 +118,9 @@ The quality gate runs actual tools and enforces numeric thresholds. Tasks **cann
 | Build | Must pass | Project build command |
 | Tests | Must pass | Full test suite |
 | Lint | Zero errors | Project linter |
-| Test coverage | >= 60% | pytest --cov / jest --coverage |
-| Max file lines | <= 500 | wc -l on source files |
-| Max function lines | <= 80 | Line count of largest function |
+| Test coverage | >= 70% | pytest --cov / jest --coverage |
+| Max file lines | <= 400 | wc -l on source files |
+| Max function lines | <= 60 | Line count of largest function |
 | Security (critical) | 0 | bandit / npm audit + secret grep |
 
 No auto-pass after N rounds. If thresholds can't be met, the pipeline escalates to the user.

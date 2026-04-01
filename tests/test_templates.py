@@ -93,6 +93,17 @@ class TestTeamExecutor:
         ))
         assert "code-architect-agent" in result
 
+    def test_agent_type_table_as_dict(self):
+        result = generate_template("team-executor", self._base_config(
+            agent_type_table={
+                "backend-agent": "implementation",
+                "integration-agent": "implementation",
+            },
+        ))
+        assert "backend-agent" in result
+        assert "integration-agent" in result
+        assert "implementation" in result
+
     def test_unknown_template(self):
         result = generate_template("nonexistent", "{}")
         assert "Unknown template" in result

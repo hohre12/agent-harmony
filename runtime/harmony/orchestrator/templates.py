@@ -42,8 +42,14 @@ def _generate_team_executor(cfg: dict) -> str:
         table_rows += f"| Code structure design, specifications | `{code_arch}` |\n"
     if db_agent:
         table_rows += f"| DB schema, indexes, migrations | `{db_agent}` |\n"
-    for entry in agent_table:
-        table_rows += f"| {entry.get('characteristics', '')} | `{entry.get('agent', '')}` |\n"
+    # Handle both formats: list of dicts OR plain dict
+    if isinstance(agent_table, dict):
+        for agent_name, role in agent_table.items():
+            if agent_name not in (main_arch, code_arch, db_agent, review_agent, e2e_agent):
+                table_rows += f"| {role} | `{agent_name}` |\n"
+    else:
+        for entry in agent_table:
+            table_rows += f"| {entry.get('characteristics', '')} | `{entry.get('agent', '')}` |\n"
     table_rows += f"| Code review, quality verification | `{review_agent}` |\n"
     if e2e_agent:
         table_rows += f"| E2E test design and implementation | `{e2e_agent}` |\n"
