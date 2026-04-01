@@ -36,8 +36,12 @@ def setup_step(step_name: str) -> str:
 def generate_tasks() -> str:
     return (
         "Read docs/prd.md and decompose the project into vertical-slice tasks.\n\n"
+        "CRITICAL — Vertical Slice Rule:\n"
+        "- Each task MUST be a complete FEATURE cutting through ALL layers\n"
+        "- WRONG: 'Set up database schema', 'Build all API endpoints', 'Create all UI pages'\n"
+        "- RIGHT: 'User Auth (DB schema + API + UI + tests)', 'Dashboard (DB + API + UI + tests)'\n"
+        "- If a task only touches ONE layer, it is WRONG. Restructure it.\n\n"
         "Rules:\n"
-        "- Each task is a FEATURE, not a layer (not 'set up DB', but 'User Auth with DB + API + UI')\n"
         "- Each task should be independently implementable and testable\n"
         "- Order tasks by dependency (foundational first)\n"
         "- For each task, create 4-8 subtasks covering all layers needed\n"
