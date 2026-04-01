@@ -5,12 +5,15 @@ from __future__ import annotations
 
 def verify_prd_compliance() -> str:
     return (
-        "Spawn a fresh Agent for PRD compliance verification (clean context).\n"
-        "Agent prompt:\n\n"
-        '  "Read docs/prd.md Section 4 (Core Features). For EACH feature:\n'
+        "**CRITICAL: You MUST use the Agent tool to spawn a NEW agent for this verification.**\n"
+        "Do NOT verify yourself — use a fresh agent with no build context.\n\n"
+        "Call Agent with this prompt:\n\n"
+        '  "You are an independent QA engineer verifying PRD compliance.\n'
+        "  Read docs/prd.md Section 4 (Core Features). For EACH feature:\n"
         "  1. Search the codebase (use Grep/Glob) for its implementation\n"
         "  2. Classify: implemented / partial / missing\n"
-        '  3. Cite specific files as evidence"\n\n'
+        "  3. Cite specific files as evidence\n"
+        '  Be strict — partial implementations should be flagged."\n\n'
         "After the Agent returns, call harmony_pipeline_next with:\n"
         '{"step":"verify_prd","gaps":[{"feature":"X","status":"partial","missing":"Y"}]}\n'
         'If all implemented: {"step":"verify_prd","gaps":[]}'

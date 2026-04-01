@@ -36,20 +36,25 @@ def production_audit(task_id: str, task_title: str) -> str:
     """Prompt for AI-based production audit — runs after quality gate passes."""
     return (
         f'Production audit for task {task_id}: "{task_title}"\n\n'
-        "Spawn a fresh Agent for this audit (clean context, no build history).\n"
-        "Agent prompt:\n\n"
+        "**CRITICAL: You MUST use the Agent tool to spawn a NEW agent for this audit.**\n"
+        "Do NOT review the code yourself — you built it, so you are biased.\n"
+        "The Agent tool creates a fresh context with no memory of the build.\n\n"
+        "Call Agent with this prompt (copy exactly):\n\n"
         '  "You are a senior engineer performing a production audit.\n'
+        "  You have NO context about how this code was built. You are an independent reviewer.\n"
         f'  Task: {task_title}\n'
         "  1. Run: git diff --name-only HEAD~1 to find changed files\n"
         "  2. Read docs/prd.md for the relevant feature spec\n"
-        "  3. Review ONLY the changed files against:\n"
+        "  3. Review ONLY the changed files. Be STRICT. Look for:\n"
         "     - PRD compliance: does the code implement what the spec says?\n"
         "     - Error handling: network failures, empty states, invalid input\n"
         "     - Security: input validation, auth checks, no hardcoded secrets\n"
         "     - Edge cases: empty lists, zero values, boundary conditions\n"
         "     - Integration: imports resolve, API contracts match\n"
-        "     - Code structure: no god files, clear separation of concerns\n"
-        '  4. For each issue: file:line, severity (MUST-FIX/SHOULD-FIX), what, how to fix"\n\n'
+        "     - Code structure: no god files (>400 lines), clear separation\n"
+        "     - Test quality: are tests meaningful or just passing trivially?\n"
+        '  4. For each issue: file:line, severity (MUST-FIX/SHOULD-FIX), what, how to fix\n'
+        '  5. Default to NEEDS_FIX. Only verdict PASS if genuinely no issues found."\n\n'
         "After the Agent returns, call harmony_pipeline_next with:\n"
         f'{{"step":"audit","task_id":"{task_id}","verdict":"PASS"/"NEEDS_FIX","issues":[...]}}'
     )

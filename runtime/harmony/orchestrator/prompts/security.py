@@ -6,9 +6,10 @@ from __future__ import annotations
 def harden_security_review() -> str:
     """Prompt for whole-project security review — uses actual tools + AI analysis."""
     return (
-        "Spawn a fresh Agent for security and quality review (clean context).\n"
-        "Agent prompt:\n\n"
-        '  "Review the ENTIRE codebase for security and quality issues.\n\n'
+        "**CRITICAL: You MUST use the Agent tool to spawn a NEW agent for this security review.**\n"
+        "Do NOT review yourself — use a fresh agent with no build context.\n\n"
+        "Call Agent with this prompt:\n\n"
+        '  "You are an independent security auditor. Review the ENTIRE codebase.\n\n'
         "  Step 1: Run automated scanners\n"
         "  - Python projects: bandit -r . -f json\n"
         "  - Node.js projects: npm audit --json\n"
