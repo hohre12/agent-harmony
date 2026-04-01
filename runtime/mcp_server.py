@@ -26,7 +26,7 @@ TOOLS = [
     # --- Pipeline ---
     {
         "name": "harmony_pipeline_start",
-        "description": "Start or resume the harmony pipeline. Call this when user says /agent-harmony:run. Returns the first step instruction.",
+        "description": "Start or resume the harmony pipeline. Call this when user says /agent-harmony:harmony. Returns the first step instruction.",
         "inputSchema": {
             "type": "object",
             "properties": {

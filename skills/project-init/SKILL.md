@@ -244,7 +244,7 @@ After all steps are complete, report to the user in the following format:
 Next steps:
 1. /generate-agents → Generate specialized agents
 2. /build-refs     → Generate per-agent domain reference documents
-3. /agent-harmony:run        → Run the full pipeline (or continue individually)
+3. /agent-harmony:harmony        → Run the full pipeline (or continue individually)
 ```
 
 ## Rules

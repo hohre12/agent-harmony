@@ -261,7 +261,7 @@ Generated agents ({n} total):
 
 Next steps:
 1. /build-refs   → Generate domain reference documents for each agent (recommended)
-2. /agent-harmony:run      → Run the full pipeline (tasks generated automatically)
+2. /agent-harmony:harmony      → Run the full pipeline (tasks generated automatically)
 ```
 
 ## Rules

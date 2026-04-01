@@ -61,10 +61,11 @@ def resume_prompt(pipeline_phase: str, pipeline_step: str, project_name: str) ->
         f"  Project: {project_name}\n"
         f"  Phase: {pipeline_phase}\n"
         f"  Step: {pipeline_step}\n\n"
-        "Use AskUserQuestion to ask:\n"
+        "You MUST call the AskUserQuestion tool to present these choices:\n"
         "  a) Resume from where I left off\n"
         "  b) Start over\n"
         "  c) Show detailed status\n"
         "  → Recommended: a) Resume\n\n"
-        "Interpret their answer and call harmony_pipeline_respond with the letter (a/b/c)."
+        "Do NOT just print the choices as text. Use the AskUserQuestion tool.\n"
+        "After the user responds, interpret their answer and call harmony_pipeline_respond with the letter (a/b/c)."
     )

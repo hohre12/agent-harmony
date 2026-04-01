@@ -29,7 +29,7 @@ and related domain files as needed, instead of repeatedly reading the entire PRD
     ↓
 /build-refs   ← Design domain map → Generate domain reference docs + Update agent files
     ↓
-/agent-harmony:run      ← Pipeline generates tasks and runs team-executor automatically
+/agent-harmony:harmony      ← Pipeline generates tasks and runs team-executor automatically
     ↓
 /team-executor → Agents reference docs/refs/ during task execution
 ```
@@ -208,7 +208,7 @@ Updated agents:
 ...
 
 Next step:
-→ /agent-harmony:run      → Run the full pipeline (tasks generated automatically)
+→ /agent-harmony:harmony      → Run the full pipeline (tasks generated automatically)
 ```
 
 ---

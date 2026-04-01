@@ -4,7 +4,8 @@ from __future__ import annotations
 
 
 _RESPOND_HINT = (
-    "\n\nUse AskUserQuestion to present the choices. "
+    "\n\nYou MUST call the AskUserQuestion tool to present the choices. "
+    "Do NOT just print them as text. "
     "Interpret the user's answer (even if natural language) and call "
     "harmony_pipeline_respond with the LETTER only (a, b, c, etc.). "
     "If the user gives a free-text answer, pass their full text."
@@ -235,7 +236,7 @@ def prd_review() -> str:
     return (
         "Show the user a summary of the PRD:\n"
         "- Project name, target users, stage, stack, feature count\n\n"
-        "Use AskUserQuestion to ask:\n"
+        "You MUST call the AskUserQuestion tool to present these choices:\n"
         "  a) Approve — start building\n"
         "  b) Show full PRD\n"
         "  c) Change something\n"

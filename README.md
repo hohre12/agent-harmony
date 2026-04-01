@@ -11,7 +11,7 @@
 ## How It Works
 
 ```
-You: /agent-harmony:run I want to build a SaaS that analyzes code quality
+You: /agent-harmony:harmony I want to build a SaaS that analyzes code quality
 
 Agent Harmony:
   1. Deep interview — asks clarifying questions → generates a complete PRD
@@ -53,7 +53,7 @@ For each task:
 /plugin install agent-harmony@jwbae-plugins
 
 # Build something
-/agent-harmony:run a todo app with authentication and team collaboration
+/agent-harmony:harmony a todo app with authentication and team collaboration
 ```
 
 That's it. One command.
@@ -161,8 +161,8 @@ Development survives interruptions:
 
 ```bash
 # Session crashes or rate limit hit
-# Just run /agent-harmony:run again — it detects saved state
-/agent-harmony:run
+# Just run /agent-harmony:harmony again — it detects saved state
+/agent-harmony:harmony
 # → "Resume from task 15/23? (a) Resume (b) Start over"
 ```
 
@@ -172,9 +172,9 @@ Development survives interruptions:
 
 | Command | Description |
 |---------|-------------|
-| `/agent-harmony:run [description]` | **One prompt to production.** Conversation → PRD → setup → build → deliver |
+| `/agent-harmony:harmony [description]` | **One prompt to production.** Conversation → PRD → setup → build → deliver |
 
-### Pipeline Commands (used by /agent-harmony:run internally, also available individually)
+### Pipeline Commands (used by /agent-harmony:harmony internally, also available individually)
 
 | Command | Description |
 |---------|-------------|

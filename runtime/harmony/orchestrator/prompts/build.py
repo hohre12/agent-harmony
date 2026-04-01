@@ -39,7 +39,7 @@ def escalation(task_title: str, issues: list[dict], scores: dict | None = None) 
         f'Task "{task_title}" is not passing quality checks.\n\n'
         f"Issues:\n{issue_text}\n"
         f"{score_text}\n"
-        "Use AskUserQuestion to ask:\n"
+        "You MUST call the AskUserQuestion tool to present these choices:\n"
         "  a) Show details — I'll fix manually\n"
         "  b) Skip this task\n"
         "  c) Try a different approach\n"

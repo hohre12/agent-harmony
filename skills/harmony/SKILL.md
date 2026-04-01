@@ -1,16 +1,16 @@
 ---
-name: run
+name: harmony
 description: "One prompt to production. Orchestrates the full pipeline: interview → PRD → setup → build → deliver."
 ---
 
-# /agent-harmony:run
+# /agent-harmony:harmony
 
-Usage: `/agent-harmony:run [what you want to build]`
+Usage: `/agent-harmony:harmony [what you want to build]`
 
 Examples:
-- `/agent-harmony:run a SaaS tool that analyzes code quality`
-- `/agent-harmony:run a CLI that converts markdown to PDFs`
-- `/agent-harmony:run` (no description — the system will ask)
+- `/agent-harmony:harmony a SaaS tool that analyzes code quality`
+- `/agent-harmony:harmony a CLI that converts markdown to PDFs`
+- `/agent-harmony:harmony` (no description — the system will ask)
 
 ## Execution
 
