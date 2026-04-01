@@ -124,7 +124,8 @@ Create `CLAUDE.md` at the project root. Branch based on PRD content + **the Git 
 - `docs/refs/`: Per-agent domain reference documents (generated after running `/build-refs`)
 
 ## Language
-All responses must match the language used in the user's initial prompt.
+This file (CLAUDE.md) must always be written in English.
+All user-facing responses must match the language used in the user's initial prompt.
 ```
 
 **[multi-git mode]** (`.git` does not exist at root):
@@ -161,25 +162,33 @@ All responses must match the language used in the user's initial prompt.
 - `docs/refs/`: Per-agent domain reference documents (generated after running `/build-refs`)
 
 ## Language
-All responses must match the language used in the user's initial prompt.
+This file (CLAUDE.md) must always be written in English.
+All user-facing responses must match the language used in the user's initial prompt.
 ```
 
 ### Step 5. Copy expert-agent.md
 
 Copy the plugin's expert-agent into the project. Search in this order:
 
-1. Plugin directory: find the `agent-harmony` plugin and copy `agents/expert-agent.md`
-2. Fallback: `~/.claude/agents/expert-agent.md`
+Search for expert-agent.md in this exact order:
 
 ```bash
-# The expert-agent.md is bundled with the agent-harmony plugin.
-# Use Glob to find it: ~/.claude/plugins/agent-harmony/agents/expert-agent.md
-# or a similar plugin installation path.
-# Copy it to the project:
-cp {found_path}/agents/expert-agent.md .claude/agents/expert-agent.md
+# 1. Plugin cache (installed via marketplace)
+find ~/.claude/plugins/cache -name "expert-agent.md" -path "*/agent-harmony/*" 2>/dev/null | head -1
+
+# 2. If not found, check if this skill was loaded via --plugin-dir
+#    The plugin root is where this SKILL.md lives → go up to find agents/expert-agent.md
+
+# 3. Last fallback
+ls ~/.claude/agents/expert-agent.md 2>/dev/null
 ```
 
-If expert-agent.md cannot be found in any location, abort immediately and notify the user.
+Copy the first found result:
+```bash
+cp {found_path} .claude/agents/expert-agent.md
+```
+
+**CRITICAL:** Do NOT skip this step. If expert-agent.md cannot be found in any location, abort immediately and notify the user.
 
 ### Step 6. Generate .claude/settings.local.json
 
@@ -249,3 +258,6 @@ Next steps:
 - MCP server selection must be justified based on PRD tech stack
 - After all files are created, output the structure in tree format
 - In the completion report, distinguish between "newly added", "overwritten", and "preserved (existing file kept as-is)" items
+- **CRITICAL: Do NOT create `.taskmaster/` directory, taskmaster config, or taskmaster state files. Agent Harmony does NOT use taskmaster.**
+- **CRITICAL: Do NOT include `task-master-ai` in `.mcp.json`. Agent Harmony manages tasks via its own pipeline.**
+- **CLAUDE.md must be written entirely in English**, regardless of what language the user used. Only the `## Language` section defines user-facing response language.

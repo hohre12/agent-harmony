@@ -283,14 +283,14 @@ class SessionState:
 
         base = ["target_users", "core_problem", "features", "tech_stack", "project_stage"]
 
-        # Add conditional questions
-        if project_type not in ("cli", "library"):
+        # Add conditional questions — skip irrelevant ones for CLI/library/personal
+        if project_type not in ("cli", "library", "personal"):
             base.append("design")
-        if project_type not in ("cli", "library", "api"):
+        if project_type not in ("cli", "library", "api", "personal"):
             base.append("auth")
         if project_type not in ("cli", "personal"):
             base.append("monetization")
-        if project_type not in ("cli", "library"):
+        if project_type not in ("cli", "library", "personal"):
             base.append("deployment")
 
         return base

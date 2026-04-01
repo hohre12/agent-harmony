@@ -130,6 +130,9 @@ def _handle_init(state: SessionState, data: dict) -> dict:
                 prompt=prompts.prd_review(),
                 expect="user_input",
             )
+        if data.get("has_docs"):
+            doc_paths = data.get("doc_paths", [])
+            state.interview_context["existing_docs"] = ", ".join(doc_paths)
         if data.get("has_code"):
             state.interview_context["has_existing_code"] = "true"
 

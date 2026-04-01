@@ -196,6 +196,14 @@ class TestInterviewSequence:
         assert "design" not in seq
         assert "auth" not in seq
 
+    def test_personal_skips_design_auth_deployment(self):
+        state = SessionState(interview_context={"project_type": "personal"})
+        seq = state.interview_question_sequence()
+        assert "design" not in seq
+        assert "auth" not in seq
+        assert "deployment" not in seq
+        assert "monetization" not in seq
+
     def test_web_includes_all(self):
         state = SessionState(interview_context={"project_type": "web"})
         seq = state.interview_question_sequence()

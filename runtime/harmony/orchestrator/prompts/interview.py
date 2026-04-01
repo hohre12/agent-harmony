@@ -23,9 +23,12 @@ def interview_start(user_request: str) -> str:
             "First, check existing context:\n"
             "1. Does docs/prd.md exist? If yes, tell the user and call harmony_pipeline_next "
             'with {"step":"context_check","has_prd":true}\n'
-            "2. Is this an existing project with code (package.json, pyproject.toml, etc.)? "
+            "2. Are there any .md design/spec documents in the project root (e.g., *-design.md, "
+            "*-spec.md, architecture.md)? If yes, tell the user which documents you found and "
+            'call harmony_pipeline_next with {"step":"context_check","has_docs":true,"doc_paths":["file1.md","file2.md"]}\n'
+            "3. Is this an existing project with code (package.json, pyproject.toml, etc.)? "
             'If yes, call harmony_pipeline_next with {"step":"context_check","has_code":true}\n'
-            '3. Fresh start: call harmony_pipeline_next with {"step":"context_check","fresh":true}\n'
+            '4. Fresh start: call harmony_pipeline_next with {"step":"context_check","fresh":true}\n'
         )
     return (
         "Ask the user: What do you want to build?\n\n"

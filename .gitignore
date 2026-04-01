@@ -12,8 +12,9 @@ runtime/.venv/
 # Runtime state (user-specific)
 .harmony/
 
-# Local guide (not for public)
+# Local files (not for public)
 LOCAL_GUIDE.md
+ISSUES.md
 
 # OS
 .DS_Store
