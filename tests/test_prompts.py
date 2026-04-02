@@ -54,7 +54,11 @@ class TestPromptLength:
         self._check_length(prompts.quality_gate("1", "Auth", thresholds), "quality_gate")
 
     def test_production_audit(self):
-        self._check_length(prompts.production_audit("1", "Auth"), "production_audit")
+        """production_audit is intentionally long — it specifies comprehensive review criteria
+        including bugs, code quality, performance, and server-detected violations."""
+        text = prompts.production_audit("1", "Auth")
+        lines = text.strip().split("\n")
+        assert 50 <= len(lines) <= 120, f"production_audit is {len(lines)} lines (expected 50-120)"
 
     def test_fix_issues(self):
         issues = [{"severity": "MUST-FIX", "file": "auth.ts", "what": "missing validation"}]

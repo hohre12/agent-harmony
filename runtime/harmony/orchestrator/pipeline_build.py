@@ -13,6 +13,7 @@ from dataclasses import asdict
 from harmony.orchestrator import prompts
 from harmony.orchestrator import verifier
 from harmony.orchestrator import verifier_frontend
+from harmony.orchestrator import verifier_code_quality
 from harmony.orchestrator.utils import make_response
 
 # The MCP server always runs in the target project's root directory.
@@ -155,6 +156,13 @@ def _handle_quality_gate(state: SessionState, data: dict) -> dict:
     for key, actual_val in actual.items():
         scores[key] = actual_val
     task.quality_scores = scores
+
+    # Run code quality verifiers (informational — flows into audit context)
+    code_quality = verifier_code_quality.verify_code_quality(cwd=_PROJECT_CWD)
+    if code_quality.get("verified"):
+        scores["code_quality_violations"] = code_quality.get("total_violations", 0)
+        scores["_code_quality_details"] = code_quality
+        task.quality_scores = scores
 
     if task.gate_passed(state.quality_thresholds):
         state.pipeline_step = f"audit_{task_id}"

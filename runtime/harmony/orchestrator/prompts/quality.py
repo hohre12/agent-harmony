@@ -30,6 +30,11 @@ def quality_gate(task_id: str, task_title: str, thresholds: dict) -> str:
         "   - grep for hardcoded color values (e.g., #fff, rgb()) outside design token files\n"
         "   - grep for hardcoded px values in layout (should use spacing tokens)\n"
         "   - Report findings as warnings (not gate failures)\n\n"
+        "9. CODE QUALITY (server-side verified — informational):\n"
+        "   The server automatically detects: magic numbers, duplicate code blocks,\n"
+        "   unused imports, N+1 query patterns, and hardcoded repeated strings.\n"
+        "   These are reported as warnings and passed to the production audit.\n"
+        "   Fix proactively — the audit agent WILL see these violations.\n\n"
         "IMPORTANT: Report EXACT numbers for ALL metrics. If a metric cannot be measured\n"
         "(e.g., no frontend = no a11y check), report the metric as 0 or true as appropriate.\n"
         "Do NOT omit any metric — omitted metrics cause automatic gate failure.\n\n"
@@ -103,6 +108,15 @@ def production_audit(task_id: str, task_title: str) -> str:
         "     - Design token usage: colors/spacing from tokens, not hardcoded values\n"
         "     - Accessibility: semantic HTML, aria attributes, keyboard navigation\n"
         "     - Common UI patterns: repeated layouts/cards/buttons should be shared components\n"
+        "     **Server-Detected Violations (check quality_scores in .harmony/state.json):**\n"
+        "     The server has already detected code quality issues stored in the task's\n"
+        "     quality_scores._code_quality_details field. Review these violations:\n"
+        "     - magic_numbers: numeric literals that should be named constants\n"
+        "     - duplicate_code: repeated code blocks that should be shared functions\n"
+        "     - unused_imports: imports that are never referenced\n"
+        "     - nplus1_queries: DB/ORM calls inside loops\n"
+        "     - hardcoded_strings: repeated string literals that should be constants\n"
+        "     Flag these as MUST-FIX if they are genuine issues.\n\n"
         '  4. For each issue: file:line, severity (MUST-FIX/SHOULD-FIX), what, how to fix\n'
         '  5. Default to NEEDS_FIX. Only verdict PASS if genuinely no issues found.\n'
         '  6. Remember: passing bad code is worse than flagging a false positive."\n\n'

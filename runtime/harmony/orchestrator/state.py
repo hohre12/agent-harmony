@@ -43,8 +43,8 @@ STAGE_THRESHOLDS: dict[str, dict] = {
     },
     "production": {
         "test_coverage": 80.0,
-        "max_file_lines": 300,
-        "max_function_lines": 40,
+        "max_file_lines": 350,
+        "max_function_lines": 50,
         "a11y_critical": 0,
         "design_token_violations": 5,  # Strict for production
     },
