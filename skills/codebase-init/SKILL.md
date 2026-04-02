@@ -128,6 +128,13 @@ Select the necessary MCP servers based on codebase analysis and generate `.mcp.j
 | Direct local filesystem manipulation | `filesystem` |
 | Notion API usage | `notion` |
 
+**FORBIDDEN — NEVER include these in `.mcp.json`:**
+- `task-master-ai` — Agent Harmony manages tasks via its own pipeline
+- `sequential-thinking` — not used by Agent Harmony
+- Any MCP server NOT listed in the table above
+
+**Final `.mcp.json` must ONLY contain servers from the table above. Nothing else.**
+
 ### Step 5. Generate CLAUDE.md
 
 Create `CLAUDE.md` at the project root. Branch based on codebase analysis + **the Git structure detected in Step 1.5**:

@@ -80,11 +80,17 @@ Select the necessary MCP servers based on PRD analysis and generate `.mcp.json`.
 | Direct filesystem access | `filesystem`: Filesystem MCP |
 | Notion API usage | `notion`: Notion MCP |
 
-**Final `.mcp.json` format:**
+**FORBIDDEN — NEVER include these in `.mcp.json`:**
+- `task-master-ai` — Agent Harmony manages tasks via its own pipeline
+- `sequential-thinking` — not used by Agent Harmony
+- Any MCP server NOT listed in the table above
+
+**Final `.mcp.json` must ONLY contain servers from the table above. Nothing else.**
+
 ```json
 {
   "mcpServers": {
-    // selected servers
+    // ONLY servers from the "Always included" and "Conditionally included" lists above
   }
 }
 ```
