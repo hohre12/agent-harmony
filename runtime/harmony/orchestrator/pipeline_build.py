@@ -24,6 +24,23 @@ _PROJECT_CWD = "."
 def _handle_build(state: SessionState, data: dict, is_user_input: bool = False) -> dict:
     step = data.get("step", "")
 
+    # Handle escalation user responses (build fix or audit escalation)
+    if is_user_input and (step.startswith("escalate") or state.pipeline_step.startswith("escalate")):
+        answer = data.get("user_input", "").strip().lower()
+        if answer in ("c", "d", "abort"):
+            state.pipeline_phase = "done"
+            return make_response(step="done", prompt="Pipeline aborted by user.", expect="none")
+        if answer in ("b", "manual"):
+            # User wants to fix manually — mark current task as completed and move on
+            task_id = data.get("task_id", "") or state.pipeline_step.split("_")[-1]
+            task = state._task_by_id(task_id)
+            if task:
+                task.status = "completed"
+                task.completed_at = _now_iso()
+            return _next_build_task(state)
+        # a (keep trying) — continue fix loop; will pick up the in_progress task
+        return _next_build_task(state)
+
     dispatch = {
         "build_task": _handle_build_task,
         "quality_gate": _handle_quality_gate,
@@ -180,7 +197,24 @@ def _handle_audit(state: SessionState, data: dict) -> dict:
         return _next_build_task(state)
     else:
         task.audit_round += 1
-        # No round limit — loop until audit passes
+        # Escalate to user every 5 audit rounds to avoid infinite loops
+        if task.audit_round >= 5 and task.audit_round % 5 == 0:
+            issues = data.get("issues", [])
+            issue_lines = "\n".join(f"- {i.get('what', '?')}" for i in issues[:5])
+            state.pipeline_step = f"escalate_{task_id}"
+            return make_response(
+                step="escalate",
+                prompt=(
+                    f'Task "{task_title}" has failed audit {task.audit_round} times.\n\n'
+                    f"Issues:\n{issue_lines}\n\n"
+                    "You MUST call the AskUserQuestion tool:\n"
+                    "  a) Keep trying — agent continues fixing\n"
+                    "  b) Show details — I'll fix manually\n"
+                    "  c) Abort pipeline\n"
+                ),
+                expect="user_input",
+                metadata={"task_id": task_id, "task_title": task_title},
+            )
         return make_response(
             step="fix",
             prompt=prompts.fix_issues(task_id, data.get("issues", [])),
@@ -248,9 +282,30 @@ def _build_fix_or_escalate(
     state: SessionState, task_id: str, task_title: str,
     issues: list[dict], scores: dict | None = None,
 ) -> dict:
-    """Always route to fix. Quality gate is non-negotiable — loop until thresholds are met."""
+    """Route to fix, but escalate to user every 5 retries to avoid infinite loops.
+
+    Quality is non-negotiable — there is no skip/accept option.
+    User can only: keep trying, fix manually, or abort.
+    """
     task = state._task_by_id(task_id)
     task.retry_count += 1
+    if task.retry_count >= 5 and task.retry_count % 5 == 0:
+        # Escalate to user — no skip/auto-pass option
+        state.pipeline_step = f"escalate_{task_id}"
+        issue_lines = "\n".join(f"- {i.get('what', '?')}" for i in issues[:5])
+        return make_response(
+            step="escalate",
+            prompt=(
+                f'Task "{task_title}" has failed quality checks {task.retry_count} times.\n\n'
+                f"Issues:\n{issue_lines}\n\n"
+                "You MUST call the AskUserQuestion tool:\n"
+                "  a) Keep trying — agent continues fixing\n"
+                "  b) Show details — I'll fix manually\n"
+                "  c) Abort pipeline\n"
+            ),
+            expect="user_input",
+            metadata={"task_id": task_id, "task_title": task_title},
+        )
     return make_response(
         step="fix",
         prompt=prompts.fix_issues(task_id, issues),

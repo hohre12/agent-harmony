@@ -27,7 +27,25 @@ def _verify_check_auditor(data: dict) -> dict | None:
 
 
 def _verify_handle_gaps(state, gaps: list, verify_round: int) -> dict:
-    """Handle PRD compliance gaps — always fix. No auto-pass, no round limit."""
+    """Handle PRD compliance gaps — fix, but escalate every 5 rounds.
+
+    No skip/accept option. User can only: keep trying, fix manually, or abort.
+    """
+    if verify_round >= 5 and verify_round % 5 == 0:
+        gap_lines = "\n".join(f"- {g}" if isinstance(g, str) else f"- {g.get('what', '?')}" for g in gaps[:5])
+        return make_response(
+            step="escalate_verify",
+            prompt=(
+                f"PRD compliance verification has failed {verify_round} times.\n\n"
+                f"Gaps:\n{gap_lines}\n\n"
+                "You MUST call the AskUserQuestion tool:\n"
+                "  a) Keep trying — agent continues fixing\n"
+                "  b) Show details — I'll fix manually\n"
+                "  c) Abort pipeline\n"
+            ),
+            expect="user_input",
+            metadata={"verify_round": verify_round},
+        )
     return make_response(
         step="verify_fix",
         prompt=prompts.verify_fix_gaps(gaps),
@@ -39,7 +57,11 @@ def _verify_handle_gaps(state, gaps: list, verify_round: int) -> dict:
 def _handle_verify(state: SessionState, data: dict, is_user_input: bool = False) -> dict:
     if is_user_input:
         answer = data.get("user_input", "").strip().lower()
-        if answer in ("b", "accept"):
+        if answer in ("c", "d", "abort"):
+            state.pipeline_phase = "done"
+            return make_response(step="done", prompt="Pipeline aborted by user.", expect="none")
+        if answer in ("b", "manual"):
+            # User wants to fix manually — skip verify and move on
             state.pipeline_phase = "harden"
             state.pipeline_step = "security_review"
             return make_response(
@@ -47,10 +69,7 @@ def _handle_verify(state: SessionState, data: dict, is_user_input: bool = False)
                 prompt=prompts.harden_security_review(),
                 expect="step_result",
             )
-        if answer in ("d", "abort"):
-            state.pipeline_phase = "done"
-            return make_response(step="done", prompt="Pipeline aborted by user.", expect="none")
-        # a (manual fix) or c (different approach) — re-verify
+        # a (keep trying) — re-verify
         return make_response(
             step="verify_prd",
             prompt=prompts.verify_prd_compliance(),
@@ -110,7 +129,28 @@ def _harden_check_auditor(data: dict) -> dict | None:
 
 
 def _harden_handle_criticals(state, data: dict, criticals: int, harden_round: int) -> dict:
-    """Handle critical security issues — always fix. No auto-pass, no round limit."""
+    """Handle critical security issues — fix, but escalate every 5 rounds.
+
+    No skip/accept option. User can only: keep trying, fix manually, or abort.
+    """
+    if harden_round >= 5 and harden_round % 5 == 0:
+        critical_list = data.get("criticals", [])
+        critical_lines = "\n".join(
+            f"- {c}" if isinstance(c, str) else f"- {c.get('what', '?')}" for c in critical_list[:5]
+        )
+        return make_response(
+            step="escalate_harden",
+            prompt=(
+                f"Security hardening has failed {harden_round} times.\n\n"
+                f"Critical issues:\n{critical_lines}\n\n"
+                "You MUST call the AskUserQuestion tool:\n"
+                "  a) Keep trying — agent continues fixing\n"
+                "  b) Show details — I'll fix manually\n"
+                "  c) Abort pipeline\n"
+            ),
+            expect="user_input",
+            metadata={"harden_round": harden_round},
+        )
     return make_response(
         step="harden_fix",
         prompt=prompts.harden_fix_criticals(data.get("criticals", [])),
@@ -122,7 +162,11 @@ def _harden_handle_criticals(state, data: dict, criticals: int, harden_round: in
 def _handle_harden(state: SessionState, data: dict, is_user_input: bool = False) -> dict:
     if is_user_input:
         answer = data.get("user_input", "").strip().lower()
-        if answer in ("b", "accept"):
+        if answer in ("c", "d", "abort"):
+            state.pipeline_phase = "done"
+            return make_response(step="done", prompt="Pipeline aborted by user.", expect="none")
+        if answer in ("b", "manual"):
+            # User wants to fix manually — skip harden and move on
             state.pipeline_phase = "delivery"
             state.pipeline_step = "final_check"
             return make_response(
@@ -130,10 +174,7 @@ def _handle_harden(state: SessionState, data: dict, is_user_input: bool = False)
                 prompt=prompts.final_check(),
                 expect="step_result",
             )
-        if answer in ("d", "abort"):
-            state.pipeline_phase = "done"
-            return make_response(step="done", prompt="Pipeline aborted by user.", expect="none")
-        # a (manual fix) or c (different approach) — re-harden
+        # a (keep trying) — re-harden
         return make_response(
             step="harden_security",
             prompt=prompts.harden_security_review(),

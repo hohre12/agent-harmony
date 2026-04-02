@@ -7,6 +7,8 @@ Each returns {"step": str, "prompt": str, "expect": "user_input"|"step_result", 
 from __future__ import annotations
 
 import json
+import os
+from pathlib import Path, PurePosixPath
 
 from harmony.orchestrator.state import SessionState, DEFAULT_STATE_PATH, _now_iso
 from harmony.orchestrator import prompts
@@ -19,6 +21,47 @@ from harmony.orchestrator.pipeline_verify import (
     _handle_verify, _handle_harden, _handle_delivery, _resume_to_current_step,
 )
 from harmony.orchestrator.pipeline_setup import _handle_setup, _next_setup_step
+
+
+# ====================================================================== #
+#  Path validation
+# ====================================================================== #
+
+_ALLOWED_PRD_EXTENSIONS = {".md"}
+
+
+def _validate_prd_path(path: str) -> str:
+    """Validate prd_path from agent data — prevent path traversal and restrict extension.
+
+    Rules:
+    - Must not contain '..' components
+    - Must be a relative path (not absolute)
+    - Must resolve to within the current working directory
+    - Must have an allowed extension (.md)
+
+    Returns the validated path string, or raises ValueError.
+    """
+    if not path or not isinstance(path, str):
+        raise ValueError("prd_path must be a non-empty string")
+    # Reject absolute paths
+    if path.startswith("/") or path.startswith("\\"):
+        raise ValueError(f"Absolute prd_path denied: {path}")
+    # Reject traversal components
+    for part in PurePosixPath(path).parts:
+        if part == "..":
+            raise ValueError(f"Path traversal denied in prd_path: {path}")
+    # Verify extension
+    ext = PurePosixPath(path).suffix.lower()
+    if ext not in _ALLOWED_PRD_EXTENSIONS:
+        raise ValueError(
+            f"Invalid prd_path extension '{ext}': only {_ALLOWED_PRD_EXTENSIONS} allowed"
+        )
+    # Verify resolved path stays within project directory
+    resolved = Path(path).resolve()
+    cwd = Path.cwd().resolve()
+    if resolved != cwd and not str(resolved).startswith(str(cwd) + os.sep):
+        raise ValueError(f"prd_path escapes project directory: {path}")
+    return path
 
 
 # ====================================================================== #
@@ -250,6 +293,11 @@ def _update_context_from_answer(state: SessionState, question_id: str, answer: s
 def _handle_prd_gen(state: SessionState, data: dict) -> dict:
     if data.get("success"):
         prd_path = data.get("prd_path", "docs/prd.md")
+        # Validate prd_path to prevent path traversal
+        try:
+            prd_path = _validate_prd_path(prd_path)
+        except ValueError:
+            prd_path = "docs/prd.md"  # Fall back to safe default
         # Server-side PRD section validation
         prd_check = verifier.verify_prd_sections(prd_path)
         if not prd_check["valid"]:

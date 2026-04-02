@@ -213,11 +213,13 @@ def _handle_setup(state: SessionState, data: dict) -> dict:
 def _next_setup_step(state: SessionState) -> dict:
     from harmony.orchestrator.pipeline_build import _next_build_task
 
-    # Ensure settings.local.json exists before any setup step runs
-    try:
-        ensure_settings_local()
-    except OSError:
-        pass  # Non-fatal — target dir may not be writable in tests
+    # Ensure settings.local.json exists — only once per session
+    if state.setup_progress.get("_settings_ensured") != "done":
+        try:
+            ensure_settings_local()
+            state.setup_progress["_settings_ensured"] = "done"
+        except OSError:
+            pass  # Non-fatal — target dir may not be writable in tests
 
     for step_name in _SETUP_SEQUENCE:
         if state.setup_progress.get(step_name) != "done":
