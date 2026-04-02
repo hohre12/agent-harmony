@@ -156,6 +156,9 @@ def _handle_resume(state: SessionState, data: dict) -> dict:
         state.prd_approved = False
         state.verify_round = 0
         state.harden_round = 0
+        state.team_config = {}
+        from harmony.orchestrator.state import DEFAULT_QUALITY_THRESHOLDS
+        state.quality_thresholds = dict(DEFAULT_QUALITY_THRESHOLDS)
         return make_response(
             step="init",
             prompt=prompts.interview_start(""),

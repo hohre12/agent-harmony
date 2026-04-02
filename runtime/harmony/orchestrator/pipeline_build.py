@@ -127,7 +127,7 @@ def _handle_quality_gate(state: SessionState, data: dict) -> dict:
 
     # Fail gate when critical metrics are unverified
     unverified = verification.get("unverified", [])
-    critical_unverified = [m for m in unverified if m in ("build", "tests")]
+    critical_unverified = [m for m in unverified if m in ("build", "tests", "lint", "test_coverage")]
     if critical_unverified:
         issues = [{"severity": "MUST-FIX", "file": "quality gate",
                     "what": f"Critical metrics {critical_unverified} could not be verified server-side. "

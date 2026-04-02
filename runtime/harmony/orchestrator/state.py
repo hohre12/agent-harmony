@@ -170,6 +170,8 @@ class SessionState:
         self.updated_at = _now_iso()
         p = Path(path)
         p.parent.mkdir(parents=True, exist_ok=True)
+        # Ensure .harmony/ is in .gitignore
+        _ensure_gitignore_entry(p.parent.name)
         data = asdict(self)
         content = json.dumps(data, indent=2, ensure_ascii=False)
         # Atomic write: write to temp file, then rename
@@ -420,3 +422,18 @@ class SessionState:
 def _now_iso() -> str:
     """Return the current UTC time in ISO-8601 format."""
     return datetime.now(timezone.utc).isoformat()
+
+
+def _ensure_gitignore_entry(dirname: str) -> None:
+    """Add dirname to .gitignore if not already present. Non-fatal on error."""
+    entry = f"{dirname}/"
+    gitignore = Path(".gitignore")
+    try:
+        content = gitignore.read_text(encoding="utf-8") if gitignore.exists() else ""
+        if entry not in content.splitlines():
+            with gitignore.open("a", encoding="utf-8") as f:
+                if content and not content.endswith("\n"):
+                    f.write("\n")
+                f.write(f"{entry}\n")
+    except OSError:
+        pass
