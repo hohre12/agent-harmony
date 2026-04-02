@@ -42,6 +42,18 @@ def _mock_quality_mismatch(*args, **kwargs):
     }
 
 
+def _mock_design_doc_valid(*args, **kwargs):
+    return {"valid": True, "exists": True, "file": "docs/tasks/t-1-plan.md", "line_count": 100, "has_code_blocks": True, "issues": []}
+
+
+def _mock_design_doc_invalid(*args, **kwargs):
+    return {"valid": False, "exists": True, "file": "docs/tasks/t-1-plan.md", "line_count": 20, "has_code_blocks": False, "issues": ["Design doc is only 20 lines — minimum 80 expected."]}
+
+
+def _mock_design_doc_missing(*args, **kwargs):
+    return {"valid": False, "exists": False, "issues": ["No design doc found for task 1"]}
+
+
 def _mock_prd_valid(*args, **kwargs):
     return {"exists": True, "missing_sections": [], "valid": True, "file_lines": 100}
 
@@ -390,6 +402,7 @@ class TestBuildFlow:
         # Task 2 should be picked up (was reset from in_progress to pending)
         assert result["metadata"]["task_id"] == "2"
 
+    @patch("harmony.orchestrator.pipeline_build.verifier.verify_design_doc", _mock_design_doc_valid)
     @patch("harmony.orchestrator.pipeline_build.verifier.verify_build_evidence", _mock_build_evidence_ok)
     def test_build_task_success_triggers_quality_gate(self, state_path):
         state = SessionState(session_id="test", pipeline_phase="build")
@@ -401,6 +414,7 @@ class TestBuildFlow:
         ))
         assert result["step"] == "quality_gate"
 
+    @patch("harmony.orchestrator.pipeline_build.verifier.verify_design_doc", _mock_design_doc_valid)
     @patch("harmony.orchestrator.pipeline_build.verifier.verify_build_evidence", _mock_build_evidence_empty)
     def test_build_task_no_evidence_retries(self, state_path):
         """Build that produces no git changes is rejected."""
@@ -413,6 +427,32 @@ class TestBuildFlow:
         ))
         assert result["step"] == "build_task"
         assert "evidence check FAILED" in result["prompt"]
+
+    @patch("harmony.orchestrator.pipeline_build.verifier.verify_design_doc", _mock_design_doc_missing)
+    def test_build_task_missing_design_doc_rejected(self, state_path):
+        """Task completion without a design doc is rejected."""
+        state = SessionState(session_id="test", pipeline_phase="build")
+        state.save(state_path)
+
+        result = json.loads(pipeline_next(
+            json.dumps({"step": "build_task", "task_id": "1", "task_title": "Auth", "success": True}),
+            state_path,
+        ))
+        assert result["step"] == "build_task"
+        assert "Design document check FAILED" in result["prompt"]
+
+    @patch("harmony.orchestrator.pipeline_build.verifier.verify_design_doc", _mock_design_doc_invalid)
+    def test_build_task_shallow_design_doc_rejected(self, state_path):
+        """Task completion with a shallow design doc is rejected."""
+        state = SessionState(session_id="test", pipeline_phase="build")
+        state.save(state_path)
+
+        result = json.loads(pipeline_next(
+            json.dumps({"step": "build_task", "task_id": "1", "task_title": "Auth", "success": True}),
+            state_path,
+        ))
+        assert result["step"] == "build_task"
+        assert "Design document check FAILED" in result["prompt"]
 
     @patch("harmony.orchestrator.pipeline_build.verifier_frontend.cross_verify_quality_scores", _mock_quality_verified)
     def test_quality_gate_pass_triggers_audit(self, state_path):

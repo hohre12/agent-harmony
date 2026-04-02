@@ -82,18 +82,18 @@ def _handle_build_task(state: SessionState, data: dict) -> dict:
     task_id = data.get("task_id", "")
     task_title = data.get("task_title", "")
     if data.get("success"):
-        # Verify design doc quality BEFORE checking code
+        # Verify design doc exists and meets quality standards
         design_check = verifier.verify_design_doc(task_id, cwd=_PROJECT_CWD)
-        if design_check.get("exists") and not design_check.get("valid"):
+        if not design_check.get("valid"):
             design_issues = "; ".join(design_check.get("issues", []))
             return make_response(
                 step="build_task",
                 prompt=(
-                    f"Design document quality check FAILED for task {task_id}: \"{task_title}\"\n\n"
+                    f"Design document check FAILED for task {task_id}: \"{task_title}\"\n\n"
                     f"Issues: {design_issues}\n\n"
-                    "The design document must be written by architect agents via TeamCreate, "
-                    "NOT directly by the main session. Re-run /agent-harmony:team-executor and "
-                    "ensure Step 3 (Team Creation and Design) spawns architect agents.\n\n"
+                    "The design document MUST exist and be written by architect agents via "
+                    "TeamCreate (Step 3) BEFORE implementation. Re-run the team-executor "
+                    "and ensure architect agents write the design doc first.\n\n"
                     f"Call harmony_pipeline_next with:\n"
                     f'{{"step":"build_task","task_id":"{task_id}","task_title":"{task_title}","success":true}}'
                 ),
@@ -453,9 +453,23 @@ def _next_build_task(state: SessionState) -> dict:
         state.mark_in_progress(task.id)
         state.pipeline_step = f"task_{task.id}"
         subtask_dicts = [asdict(st) for st in task.subtasks] if task.subtasks else None
+
+        # Pre-flight: check if a PREVIOUS task left a bad design doc
+        # (This catches design docs written after implementation on prior runs)
+        design_check = verifier.verify_design_doc(task.id, cwd=_PROJECT_CWD)
+        design_warning = ""
+        if design_check.get("exists") and not design_check.get("valid"):
+            design_issues = "; ".join(design_check.get("issues", []))
+            design_warning = (
+                f"⚠ DESIGN DOC QUALITY WARNING for task {task.id}:\n"
+                f"Issues: {design_issues}\n"
+                "The design doc MUST be written by architect agents via TeamCreate "
+                "(Step 3) BEFORE implementation begins. Fix the design doc first.\n\n"
+            )
+
         return make_response(
             step="build_task",
-            prompt=prompts.build_task(task.id, task.title, tag=tag, progress=progress, subtasks=subtask_dicts, team_config=tcfg, thresholds=state.quality_thresholds, project_language=plang),
+            prompt=design_warning + prompts.build_task(task.id, task.title, tag=tag, progress=progress, subtasks=subtask_dicts, team_config=tcfg, thresholds=state.quality_thresholds, project_language=plang),
             expect="step_result",
             metadata={"task_id": task.id, "task_title": task.title},
         )

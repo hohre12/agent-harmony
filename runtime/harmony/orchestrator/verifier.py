@@ -493,6 +493,16 @@ def verify_design_doc(task_id: str, cwd: str = ".") -> dict:
         if "subtask" not in content_lower and "sub-task" not in content_lower:
             issues.append("Design doc does not reference subtask IDs — each subtask should be addressed")
 
+    # 5. Temporal check — design doc should be committed before implementation code
+    #    This prevents agents from writing the doc AFTER implementation just to pass.
+    doc_committed_before_code = _design_doc_precedes_code(str(doc_path), cwd)
+    if doc_committed_before_code is False:
+        issues.append(
+            "Design doc was committed AFTER implementation code — "
+            "design must be done BEFORE implementation. "
+            "Use TeamCreate + architect agents in Step 3."
+        )
+
     return {
         "valid": len(issues) == 0,
         "exists": True,
@@ -501,6 +511,53 @@ def verify_design_doc(task_id: str, cwd: str = ".") -> dict:
         "has_code_blocks": has_code_blocks,
         "issues": issues,
     }
+
+
+def _design_doc_precedes_code(doc_abs_path: str, cwd: str) -> bool | None:
+    """Check if the design doc was committed before the majority of source code.
+
+    Returns True if design doc commit is earlier, False if later, None if
+    we can't determine (e.g., files not committed yet).
+    """
+    # Get the first commit that introduced the design doc
+    code_doc, out_doc = run_cmd(
+        ["git", "log", "--diff-filter=A", "--format=%H", "--", doc_abs_path],
+        cwd=cwd,
+    )
+    if code_doc != 0 or not out_doc.strip():
+        return None  # Can't determine — file not committed yet or git error
+    doc_commit = out_doc.strip().splitlines()[-1]  # Oldest commit that added the file
+
+    # Get the first commit with source code changes (non-doc, non-config files)
+    source_exts = ("*.py", "*.ts", "*.tsx", "*.js", "*.jsx", "*.vue", "*.svelte")
+    code_commits: list[str] = []
+    for ext in source_exts:
+        code_ret, code_out = run_cmd(
+            ["git", "log", "--diff-filter=A", "--format=%H", "--", ext],
+            cwd=cwd,
+        )
+        if code_ret == 0 and code_out.strip():
+            code_commits.extend(code_out.strip().splitlines())
+    if not code_commits:
+        return None  # No source code committed yet
+
+    # Use git merge-base --is-ancestor to check order
+    # If doc_commit is ancestor of earliest code commit → doc came first
+    earliest_code = code_commits[-1]  # Last line = oldest commit
+    ret, _ = run_cmd(
+        ["git", "merge-base", "--is-ancestor", doc_commit, earliest_code],
+        cwd=cwd,
+    )
+    if ret == 0:
+        return True  # Doc commit is ancestor of code → doc came first
+    # Check reverse
+    ret2, _ = run_cmd(
+        ["git", "merge-base", "--is-ancestor", earliest_code, doc_commit],
+        cwd=cwd,
+    )
+    if ret2 == 0:
+        return False  # Code commit is ancestor of doc → code came first
+    return None  # Can't determine (parallel branches, etc.)
 
 
 def verify_files_exist(paths: list[str], cwd: str = ".") -> dict:
