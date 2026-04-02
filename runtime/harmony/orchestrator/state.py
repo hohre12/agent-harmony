@@ -60,6 +60,18 @@ def thresholds_for_stage(stage: str) -> dict:
 
 
 @dataclass
+class SubtaskState:
+    """State of a subtask within a main task."""
+
+    id: str
+    title: str
+    description: str = ""
+    test: str = ""  # Acceptance criteria
+    assigned_agent: str = ""
+    status: str = "pending"  # pending | in_progress | completed | failed
+
+
+@dataclass
 class TaskState:
     """State of a single development task."""
 
@@ -67,6 +79,7 @@ class TaskState:
     title: str
     status: str = "pending"  # pending | in_progress | completed | failed
     assigned_agent: str = ""
+    subtasks: list[SubtaskState] = field(default_factory=list)
     retry_count: int = 0
     max_retries: int = 3
     last_error: str = ""
@@ -133,6 +146,7 @@ class SessionState:
 
     # Phase 2: Setup
     setup_progress: dict[str, str] = field(default_factory=dict)
+    team_config: dict = field(default_factory=dict)  # Agent role mapping (main_architect, review_agent, etc.)
 
     # Phase 3: Build
     total_tasks: int = 0
@@ -188,7 +202,14 @@ class SessionState:
                 continue
             try:
                 data = json.loads(candidate.read_text(encoding="utf-8"))
-                tasks = [TaskState(**t) for t in data.pop("tasks", [])]
+                raw_tasks = data.pop("tasks", [])
+                tasks = []
+                for t in raw_tasks:
+                    raw_subtasks = t.pop("subtasks", [])
+                    subtasks = [SubtaskState(**st) for st in raw_subtasks]
+                    task = TaskState(**t)
+                    task.subtasks = subtasks
+                    tasks.append(task)
                 state = cls(**data)
                 state.tasks = tasks
                 return state
@@ -217,12 +238,23 @@ class SessionState:
         now = _now_iso()
         task_states: list[TaskState] = []
         for t in tasks:
+            subtasks = [
+                SubtaskState(
+                    id=str(st.get("id", "")),
+                    title=st.get("title", ""),
+                    description=st.get("description", ""),
+                    test=st.get("test", ""),
+                    assigned_agent=st.get("agent", ""),
+                )
+                for st in t.get("subtasks", [])
+            ]
             task_states.append(
                 TaskState(
                     id=str(t["id"]),
                     title=t["title"],
                     assigned_agent=t.get("agent", ""),
                     max_retries=t.get("max_retries", 3),
+                    subtasks=subtasks,
                 )
             )
         branch = f"harmony/dev-{sid[:8]}"
@@ -339,9 +371,22 @@ class SessionState:
 
         base = ["target_users", "core_problem", "features", "tech_stack", "project_stage"]
 
-        # Add conditional questions — skip irrelevant ones for CLI/library/personal
+        # Add conditional questions — skip irrelevant ones for CLI/library
         if project_type not in ("cli", "library", "personal"):
             base.append("design")
+        elif project_type == "personal":
+            # Personal projects still need design if they have a frontend
+            tech = ctx.get("tech_stack", "").lower()
+            features = ctx.get("features", "").lower()
+            request = ctx.get("user_request", "").lower()
+            all_text = f"{tech} {features} {request}"
+            frontend_hints = (
+                "react", "next", "vue", "angular", "svelte", "frontend",
+                "dashboard", "대시보드", "ui", "화면", "web", "웹",
+                "html", "css", "tailwind", "page", "페이지",
+            )
+            if any(kw in all_text for kw in frontend_hints):
+                base.append("design")
         if project_type not in ("cli", "library", "api", "personal"):
             base.append("auth")
         if project_type not in ("cli", "personal"):

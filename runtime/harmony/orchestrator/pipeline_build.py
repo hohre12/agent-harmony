@@ -8,7 +8,8 @@ from __future__ import annotations
 import json
 import uuid
 
-from harmony.orchestrator.state import SessionState, TaskState, _now_iso
+from harmony.orchestrator.state import SessionState, TaskState, SubtaskState, _now_iso
+from dataclasses import asdict
 from harmony.orchestrator import prompts
 from harmony.orchestrator import verifier
 from harmony.orchestrator import verifier_frontend
@@ -306,6 +307,7 @@ def _gate_failures(scores: dict, thresholds: dict) -> list[str]:
 def _next_build_task(state: SessionState) -> dict:
     """Find the next pending task. Uses checkpoint data for interrupted tasks."""
     tag = state.session_id[:8] if state.session_id else "v1"
+    tcfg = state.team_config or None
 
     # Check for interrupted tasks with checkpoint data first
     for t in state.tasks:
@@ -316,6 +318,7 @@ def _next_build_task(state: SessionState) -> dict:
                 total = len(state.tasks)
                 progress = f"Task {completed + 1}/{total}"
                 state.pipeline_step = f"task_{t.id}"
+                subtask_dicts = [asdict(st) for st in t.subtasks] if t.subtasks else None
                 return make_response(
                     step="build_task",
                     prompt=prompts.build_task(
@@ -324,6 +327,8 @@ def _next_build_task(state: SessionState) -> dict:
                         checkpoint_step=t.checkpoint_step,
                         checkpoint=t.checkpoint,
                         progress=progress,
+                        subtasks=subtask_dicts,
+                        team_config=tcfg,
                     ),
                     expect="step_result",
                     metadata={"task_id": t.id, "task_title": t.title},
@@ -339,9 +344,10 @@ def _next_build_task(state: SessionState) -> dict:
         progress = f"Task {completed + 1}/{total}"
         state.mark_in_progress(task.id)
         state.pipeline_step = f"task_{task.id}"
+        subtask_dicts = [asdict(st) for st in task.subtasks] if task.subtasks else None
         return make_response(
             step="build_task",
-            prompt=prompts.build_task(task.id, task.title, tag=tag, progress=progress),
+            prompt=prompts.build_task(task.id, task.title, tag=tag, progress=progress, subtasks=subtask_dicts, team_config=tcfg),
             expect="step_result",
             metadata={"task_id": task.id, "task_title": task.title},
         )

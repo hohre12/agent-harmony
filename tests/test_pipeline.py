@@ -283,6 +283,34 @@ class TestSetupFlow:
         loaded = SessionState.load(state_path)
         assert loaded.total_tasks == 2
 
+    @patch("harmony.orchestrator.pipeline_setup.verifier.verify_task_structure", _mock_task_structure_valid)
+    def test_setup_stores_subtasks(self, state_path):
+        """Verify subtasks are persisted in state, not discarded."""
+        state = SessionState(
+            session_id="test",
+            pipeline_phase="setup",
+            setup_progress={"project_init": "done", "generate_agents": "done", "build_refs": "done"},
+        )
+        state.save(state_path)
+
+        pipeline_next(json.dumps({"step": "", "success": True}), state_path)
+
+        result = json.loads(pipeline_next(
+            json.dumps({"step": "generate_tasks", "success": True, "tasks": [
+                {"id": "1", "title": "Auth [LEAD: architect]", "subtasks": [
+                    {"id": "1.1", "title": "DB schema (db-agent)", "description": "Create user table", "test": "Table exists", "agent": "db-agent"},
+                    {"id": "1.2", "title": "API endpoints (backend-agent)", "description": "Auth REST API", "test": "Login returns token", "agent": "backend-agent"},
+                ]},
+            ]}),
+            state_path,
+        ))
+        loaded = SessionState.load(state_path)
+        assert loaded.total_tasks == 1
+        assert len(loaded.tasks[0].subtasks) == 2
+        assert loaded.tasks[0].subtasks[0].id == "1.1"
+        assert loaded.tasks[0].subtasks[0].description == "Create user table"
+        assert loaded.tasks[0].subtasks[1].assigned_agent == "backend-agent"
+
     @patch("harmony.orchestrator.pipeline_setup.verifier.verify_task_structure", _mock_task_structure_invalid)
     def test_setup_generates_tasks_fails_vertical_slice(self, state_path):
         """Tasks that fail vertical-slice validation are rejected."""

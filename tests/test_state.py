@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from harmony.orchestrator.state import SessionState, TaskState
+from harmony.orchestrator.state import SessionState, TaskState, SubtaskState
 
 
 class TestTaskState:
@@ -283,6 +283,63 @@ class TestAuditNonceFieldState:
         state.save(path)
         loaded = SessionState.load(path)
         assert loaded.tasks[0].audit_nonce == "abc123"
+
+
+class TestSubtaskState:
+    def test_subtask_defaults(self):
+        st = SubtaskState(id="1.1", title="DB schema")
+        assert st.status == "pending"
+        assert st.description == ""
+        assert st.test == ""
+        assert st.assigned_agent == ""
+
+    def test_task_with_subtasks(self):
+        subtasks = [
+            SubtaskState(id="1.1", title="DB schema (db-agent)", description="Create tables", test="Tables exist", assigned_agent="db-agent"),
+            SubtaskState(id="1.2", title="API endpoints (backend-agent)", description="REST API", test="Endpoints respond", assigned_agent="backend-agent"),
+        ]
+        task = TaskState(id="1", title="Auth [LEAD: architect]", subtasks=subtasks)
+        assert len(task.subtasks) == 2
+        assert task.subtasks[0].assigned_agent == "db-agent"
+        assert task.subtasks[1].test == "Endpoints respond"
+
+    def test_subtasks_persist_save_load(self, tmp_path):
+        path = str(tmp_path / "state.json")
+        state = SessionState(
+            session_id="test",
+            tasks=[TaskState(
+                id="1", title="Auth",
+                subtasks=[
+                    SubtaskState(id="1.1", title="Schema", description="Create user table", test="Table exists", assigned_agent="db-agent"),
+                    SubtaskState(id="1.2", title="API", description="Auth endpoints", test="Login works", assigned_agent="backend-agent"),
+                ],
+            )],
+        )
+        state.save(path)
+        loaded = SessionState.load(path)
+        assert len(loaded.tasks[0].subtasks) == 2
+        assert loaded.tasks[0].subtasks[0].id == "1.1"
+        assert loaded.tasks[0].subtasks[0].description == "Create user table"
+        assert loaded.tasks[0].subtasks[1].assigned_agent == "backend-agent"
+
+    def test_create_new_with_subtasks(self):
+        tasks = [{
+            "id": "1", "title": "Auth",
+            "subtasks": [
+                {"id": "1.1", "title": "Schema", "description": "Tables", "test": "Exists", "agent": "db-agent"},
+                {"id": "1.2", "title": "API", "description": "Endpoints", "test": "Works", "agent": "backend-agent"},
+            ],
+        }]
+        state = SessionState.create_new("test", tasks)
+        assert len(state.tasks[0].subtasks) == 2
+        assert state.tasks[0].subtasks[0].assigned_agent == "db-agent"
+        assert state.tasks[0].subtasks[1].test == "Works"
+
+    def test_create_new_without_subtasks(self):
+        """Backward compatible — tasks without subtasks still work."""
+        tasks = [{"id": "1", "title": "Auth"}]
+        state = SessionState.create_new("test", tasks)
+        assert state.tasks[0].subtasks == []
 
 
 class TestPrdSectionDepth:

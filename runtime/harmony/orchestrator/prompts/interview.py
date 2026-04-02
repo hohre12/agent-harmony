@@ -108,8 +108,15 @@ def _q_features(ctx: dict) -> str:
         "  c) Feature 3 — description\n"
         "  d) Feature 4 — description\n"
         "  e) Add your own\n\n"
-        "  ✓ = Recommended. User can pick multiple: 'a, b, c' or add custom."
-        + _RESPOND_HINT
+        "  ✓ = Recommended. User can pick multiple: 'a, b, c' or add custom.\n\n"
+        "You MUST call the AskUserQuestion tool to present the choices. "
+        "Do NOT just print them as text. "
+        "IMPORTANT: When calling harmony_pipeline_respond, send the FULL TEXT "
+        "of the selected features (the actual feature names/descriptions you "
+        "suggested), NOT just the letters. For example, if the user picks a "
+        "and c, send 'Web Dashboard — real-time overview, Audit Agent — "
+        "content verification' (the actual feature descriptions). "
+        "If the user gives a free-text answer, pass their full text."
     )
 
 

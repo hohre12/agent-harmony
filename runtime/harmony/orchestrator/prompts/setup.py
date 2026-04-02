@@ -65,11 +65,18 @@ def setup_team_executor() -> str:
         "- db_agent: orange agent (null if none)\n"
         "- review_agent: red agent (or green, or main_architect)\n"
         "- e2e_agent: green agent for E2E testing (null if none)\n\n"
-        "Then call harmony_generate_template with:\n"
-        '- template_name: "team-executor"\n'
-        "- config_json with: project_name, main_architect, code_architect, "
-        "db_agent, review_agent, e2e_agent, agent_type_table, git_mode\n\n"
-        "Write the returned content to .claude/skills/team-executor/SKILL.md\n\n"
-        "When complete, call harmony_pipeline_next with:\n"
-        '{"step":"setup_team_executor","success":true}'
+        "Return the team config via harmony_pipeline_next. Do NOT generate files.\n"
+        "The team-executor workflow is bundled with the plugin — only the agent role\n"
+        "mapping needs to be stored.\n\n"
+        "Call harmony_pipeline_next with:\n"
+        '{"step":"setup_team_executor","success":true,"team_config":{\n'
+        '  "project_name":"...",\n'
+        '  "main_architect":"architect-agent",\n'
+        '  "code_architect":"architect-agent",\n'
+        '  "db_agent":"db-agent or null",\n'
+        '  "review_agent":"review-agent or testing-agent",\n'
+        '  "e2e_agent":"testing-agent or null",\n'
+        '  "git_mode":"monorepo or multi-git",\n'
+        '  "agent_type_table":{"agent-name":"role description",...}\n'
+        "}}"
     )

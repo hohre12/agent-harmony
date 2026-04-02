@@ -6,7 +6,7 @@ import json
 import os
 from pathlib import Path
 
-from harmony.orchestrator.state import SessionState, TaskState
+from harmony.orchestrator.state import SessionState, TaskState, SubtaskState
 from harmony.orchestrator import prompts
 from harmony.orchestrator import verifier
 from harmony.orchestrator import verifier_frontend
@@ -95,10 +95,21 @@ def _validate_and_store_tasks(state: SessionState, tasks_data: list) -> dict | N
         for t in tasks_data:
             if not isinstance(t, dict) or "id" not in t or "title" not in t:
                 raise ValueError(f"Invalid task format: {t}")
+            subtasks = [
+                SubtaskState(
+                    id=str(st.get("id", "")),
+                    title=st.get("title", ""),
+                    description=st.get("description", ""),
+                    test=st.get("test", ""),
+                    assigned_agent=st.get("agent", ""),
+                )
+                for st in t.get("subtasks", [])
+            ]
             state.tasks.append(TaskState(
                 id=str(t["id"]),
                 title=t["title"],
                 assigned_agent=t.get("agent", ""),
+                subtasks=subtasks,
             ))
     except (TypeError, ValueError):
         state.tasks.clear()
@@ -186,6 +197,14 @@ def _handle_setup(state: SessionState, data: dict) -> dict:
         state.setup_progress[step] = "done"
         return _next_setup_step(state)
 
+    # setup_team_executor returns team_config — store in state
+    if step == "setup_team_executor" and data.get("success"):
+        team_cfg = data.get("team_config", {})
+        if isinstance(team_cfg, dict) and team_cfg:
+            state.team_config = team_cfg
+        state.setup_progress[step] = "done"
+        return _next_setup_step(state)
+
     if step and data.get("success"):
         state.setup_progress[step] = "done"
     return _next_setup_step(state)
@@ -217,6 +236,7 @@ def _next_setup_step(state: SessionState) -> dict:
                     "react", "next", "vue", "angular", "svelte", "frontend",
                     "web app", "webapp", "landing", "dashboard", "tailwind",
                     "css", "ui", "website", "page", "remix", "nuxt", "astro",
+                    "프론트엔드", "대시보드", "웹", "화면", "디자인", "페이지",
                 )
                 has_frontend = any(kw in all_context for kw in frontend_keywords)
                 if not has_frontend or "separately" in design_choice.lower() or "functional" in design_choice.lower():
