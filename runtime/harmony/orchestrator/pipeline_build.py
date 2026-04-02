@@ -385,6 +385,20 @@ def _next_build_task(state: SessionState) -> dict:
             else:
                 # No checkpoint — reset to pending (full restart)
                 t.status = "pending"
+                # Notify via metadata so the user sees which task restarted
+                return make_response(
+                    step="build_task",
+                    prompt=(
+                        f"⚠ Task {t.id} (\"{t.title}\") had no checkpoint — restarting from scratch.\n\n"
+                        + prompts.build_task(
+                            t.id, t.title, tag=tag, progress=f"Task (restarting)/{len(state.tasks)}",
+                            subtasks=[asdict(st) for st in t.subtasks] if t.subtasks else None,
+                            team_config=tcfg, thresholds=state.quality_thresholds, project_language=plang,
+                        )
+                    ),
+                    expect="step_result",
+                    metadata={"task_id": t.id, "task_title": t.title, "restarted": True},
+                )
 
     task = state.next_pending_task()
     if task is not None:

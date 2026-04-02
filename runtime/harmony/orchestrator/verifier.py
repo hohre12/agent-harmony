@@ -64,12 +64,28 @@ def verify_build_evidence(cwd: str = ".") -> dict:
     }
 
 
+def _git_changed_files(cwd: str) -> str:
+    """Get list of changed files using merge-base for accuracy across multi-commit tasks."""
+    # Try merge-base against main/master/develop for the most accurate diff
+    for base in ("main", "master", "develop"):
+        code, merge_base = run_cmd(["git", "merge-base", base, "HEAD"], cwd=cwd)
+        if code == 0 and merge_base.strip():
+            code, out = run_cmd(["git", "diff", "--name-only", "--diff-filter=ACMR", merge_base.strip()], cwd=cwd)
+            if code == 0 and out.strip():
+                return out
+    # Fallback to HEAD~1
+    code, out = run_cmd(["git", "diff", "--name-only", "--diff-filter=ACMR", "HEAD~1"], cwd=cwd)
+    if code == 0 and out.strip():
+        return out
+    # Last resort: all tracked files
+    code, out = run_cmd(["git", "ls-files"], cwd=cwd)
+    return out if code == 0 else ""
+
+
 def verify_file_sizes(cwd: str = ".") -> dict:
     """Find the largest source file by line count among recently changed files."""
     cwd = _safe_cwd(cwd)
-    code, out = run_cmd(["git", "diff", "--name-only", "--diff-filter=ACMR", "HEAD~1"], cwd=cwd)
-    if code != 0 or not out.strip():
-        code, out = run_cmd(["git", "ls-files"], cwd=cwd)
+    out = _git_changed_files(cwd)
     if not out.strip():
         return {"max_file_lines": 0, "largest_file": "", "verified": False}
     source_exts = {".py", ".ts", ".tsx", ".js", ".jsx", ".vue", ".svelte", ".go", ".rs", ".java"}
@@ -374,9 +390,7 @@ def _measure_js_functions(source: str, filepath: str = "") -> tuple[int, str]:
 def verify_function_sizes(cwd: str = ".") -> dict:
     """Measure the largest function by line count using Python AST for .py files, regex for others."""
     cwd = _safe_cwd(cwd)
-    code, out = run_cmd(["git", "diff", "--name-only", "--diff-filter=ACMR", "HEAD~1"], cwd=cwd)
-    if code != 0 or not out.strip():
-        code, out = run_cmd(["git", "ls-files"], cwd=cwd)
+    out = _git_changed_files(cwd)
     if not out.strip():
         return {"max_function_lines": 0, "largest_function": "", "file": "", "verified": False}
     max_lines = 0
