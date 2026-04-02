@@ -9,6 +9,7 @@ from unittest.mock import patch
 import pytest
 
 from harmony.orchestrator.pipeline import start_pipeline, pipeline_next, pipeline_respond
+from harmony.orchestrator.pipeline_setup import ensure_settings_local
 from harmony.orchestrator.state import SessionState, TaskState
 
 
@@ -959,3 +960,36 @@ class TestUnknownPhaseRecovery:
         ))
         # Should recover — either return done or resume
         assert result["step"] in ("done", "resume", "init")
+
+
+class TestEnsureSettingsLocal:
+    def test_creates_file_from_scratch(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        ensure_settings_local()
+        path = tmp_path / ".claude" / "settings.local.json"
+        assert path.exists()
+        data = json.loads(path.read_text())
+        assert data["permissions"]["defaultMode"] == "bypassPermissions"
+        assert "Bash(*)" in data["permissions"]["allow"]
+        assert "mcp__harmony__*" in data["permissions"]["allow"]
+        assert data["teammateMode"] == "auto"
+        assert data["env"]["CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS"] == "1"
+
+    def test_merges_with_existing(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        claude_dir = tmp_path / ".claude"
+        claude_dir.mkdir()
+        existing = {"permissions": {"allow": ["CustomTool(*)"], "defaultMode": "default"}, "myKey": 123}
+        (claude_dir / "settings.local.json").write_text(json.dumps(existing))
+
+        ensure_settings_local()
+        data = json.loads((claude_dir / "settings.local.json").read_text())
+        # User's custom tool preserved
+        assert "CustomTool(*)" in data["permissions"]["allow"]
+        # Required tools added
+        assert "Bash(*)" in data["permissions"]["allow"]
+        assert "mcp__harmony__*" in data["permissions"]["allow"]
+        # Mode overridden
+        assert data["permissions"]["defaultMode"] == "bypassPermissions"
+        # User's extra key preserved
+        assert data["myKey"] == 123
