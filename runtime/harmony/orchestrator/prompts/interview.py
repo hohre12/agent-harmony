@@ -50,6 +50,7 @@ def interview_question(question_id: str, context: dict) -> str:
         "features": _q_features,
         "tech_stack": _q_tech_stack,
         "project_stage": _q_project_stage,
+        "project_language": _q_project_language,
         "design": _q_design,
         "auth": _q_auth,
         "monetization": _q_monetization,
@@ -148,6 +149,19 @@ def _q_project_stage(ctx: dict) -> str:
     )
 
 
+def _q_project_language(ctx: dict) -> str:
+    return (
+        "Ask the user:\n\n"
+        "What language should the project's code and documentation be written in?\n"
+        "(This controls: code comments, variable names, commit messages, README, PRD)\n\n"
+        "  a) English — recommended for global compatibility\n"
+        "  b) Same as conversation language\n"
+        "  c) Other — specify\n\n"
+        "  → Recommended: a) English — standard for open source and collaboration."
+        + _RESPOND_HINT
+    )
+
+
 def _q_design(ctx: dict) -> str:
     return (
         "Ask the user:\n\n"
@@ -223,10 +237,19 @@ def generate_prd(context: dict) -> str:
         f"Stack: {context.get('tech_stack', '')}",
         f"Stage: {context.get('project_stage', '')}",
     ]
-    for key in ("auth", "design", "monetization", "deployment"):
+    for key in ("auth", "design", "monetization", "deployment", "project_language"):
         if context.get(key):
             ctx_lines.append(f"{key.title()}: {context[key]}")
     context_block = "\n".join(ctx_lines)
+
+    # Determine PRD writing language
+    proj_lang = context.get("project_language", "").lower()
+    if "english" in proj_lang:
+        lang_rule = "- Write the ENTIRE PRD in English. All section headers, descriptions, and technical terms in English."
+    elif "same" in proj_lang or "conversation" in proj_lang:
+        lang_rule = "- Write the PRD in the SAME LANGUAGE the user used during the interview."
+    else:
+        lang_rule = f"- Write the PRD in: {context.get('project_language', 'the same language as the interview')}."
 
     return (
         "Generate docs/prd.md — a COMPREHENSIVE Product Requirements Document.\n"
@@ -234,7 +257,7 @@ def generate_prd(context: dict) -> str:
         "=== INTERVIEW CONTEXT ===\n"
         f"{context_block}\n\n"
         "=== GLOBAL RULES ===\n"
-        "- Write the PRD in the SAME LANGUAGE the user used during the interview.\n"
+        f"{lang_rule}\n"
         "- Use the interview context to INFER any missing details. Make reasonable "
         "assumptions based on the project type, stack, and target users.\n"
         "- If a detail truly cannot be inferred, make a sensible default choice and "
@@ -393,6 +416,10 @@ CHOICE_MAP: dict[str, dict[str, str]] = {
         "a": "Prototype",
         "b": "MVP",
         "c": "Production",
+    },
+    "project_language": {
+        "a": "English",
+        "b": "Same as conversation language",
     },
     "design": {
         "a": "Clean & minimal (shadcn/ui)",

@@ -370,7 +370,7 @@ class SessionState:
         ctx = self.interview_context
         project_type = ctx.get("project_type", "")
 
-        base = ["target_users", "core_problem", "features", "tech_stack", "project_stage"]
+        base = ["target_users", "core_problem", "features", "tech_stack", "project_stage", "project_language"]
 
         # Add conditional questions — skip irrelevant ones for CLI/library
         if project_type not in ("cli", "library", "personal"):

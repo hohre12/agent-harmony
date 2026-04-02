@@ -354,6 +354,7 @@ def _next_build_task(state: SessionState) -> dict:
     """Find the next pending task. Uses checkpoint data for interrupted tasks."""
     tag = state.session_id[:8] if state.session_id else "v1"
     tcfg = state.team_config or None
+    plang = state.interview_context.get("project_language", "")
 
     # Check for interrupted tasks with checkpoint data first
     for t in state.tasks:
@@ -376,6 +377,7 @@ def _next_build_task(state: SessionState) -> dict:
                         subtasks=subtask_dicts,
                         team_config=tcfg,
                         thresholds=state.quality_thresholds,
+                        project_language=plang,
                     ),
                     expect="step_result",
                     metadata={"task_id": t.id, "task_title": t.title},
@@ -394,7 +396,7 @@ def _next_build_task(state: SessionState) -> dict:
         subtask_dicts = [asdict(st) for st in task.subtasks] if task.subtasks else None
         return make_response(
             step="build_task",
-            prompt=prompts.build_task(task.id, task.title, tag=tag, progress=progress, subtasks=subtask_dicts, team_config=tcfg, thresholds=state.quality_thresholds),
+            prompt=prompts.build_task(task.id, task.title, tag=tag, progress=progress, subtasks=subtask_dicts, team_config=tcfg, thresholds=state.quality_thresholds, project_language=plang),
             expect="step_result",
             metadata={"task_id": task.id, "task_title": task.title},
         )

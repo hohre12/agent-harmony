@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-def build_task(task_id: str, task_title: str, tag: str = "", checkpoint_step: str = "", checkpoint: str = "", progress: str = "", subtasks: list | None = None, team_config: dict | None = None, thresholds: dict | None = None) -> str:
+def build_task(task_id: str, task_title: str, tag: str = "", checkpoint_step: str = "", checkpoint: str = "", progress: str = "", subtasks: list | None = None, team_config: dict | None = None, thresholds: dict | None = None, project_language: str = "") -> str:
     tag_display = tag or "v1"
     resume_hint = ""
     if checkpoint_step:
@@ -55,11 +55,20 @@ def build_task(task_id: str, task_title: str, tag: str = "", checkpoint_step: st
     # their output will be independently verified by a blind reviewer.
     accountability_block = _accountability_block(thresholds)
 
+    lang_block = ""
+    if project_language:
+        lang_lower = project_language.lower()
+        if "english" in lang_lower:
+            lang_block = "\n**Project Language: English** — All code comments, variable names, commit messages, documentation, and UI text must be in English.\n"
+        elif "same" not in lang_lower and "conversation" not in lang_lower:
+            lang_block = f"\n**Project Language: {project_language}** — Code comments, documentation, and UI text should be in {project_language}.\n"
+
     return (
         f"{progress_line}Execute task {task_id}: \"{task_title}\"\n\n"
         f"{resume_hint}"
         f"{subtask_block}"
-        f"{team_block}\n"
+        f"{team_block}"
+        f"{lang_block}\n"
         f"{accountability_block}\n"
         f"**Execution**: Run `/agent-harmony:team-executor {tag_display}:{task_id}`\n\n"
         "After completing the task, call harmony_pipeline_next with:\n"
