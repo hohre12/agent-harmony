@@ -66,6 +66,10 @@ Select the necessary MCP servers based on PRD analysis and generate `.mcp.json`.
 "context7": {
   "command": "npx",
   "args": ["-y", "@upstash/context7-mcp"]
+},
+"sequential-thinking": {
+  "command": "npx",
+  "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
 }
 ```
 
@@ -82,7 +86,7 @@ Select the necessary MCP servers based on PRD analysis and generate `.mcp.json`.
 
 **FORBIDDEN — NEVER include these in `.mcp.json`:**
 - `task-master-ai` — Agent Harmony manages tasks via its own pipeline
-- `sequential-thinking` — not used by Agent Harmony
+
 - Any MCP server NOT listed in the table above
 
 **Final `.mcp.json` must ONLY contain servers from the table above. Nothing else.**
@@ -209,8 +213,17 @@ Create the settings file to enable agent team features and permissions:
       "Bash(*)",
       "Edit(*)",
       "Read(*)",
+      "Write(*)",
+      "Glob(*)",
+      "Grep(*)",
       "WebFetch(*)",
-      "WebSearch"
+      "WebSearch",
+      "mcp__harmony__*",
+      "mcp__context7__*",
+      "mcp__stitch__*",
+      "mcp__github__*",
+      "mcp__supabase__*",
+      "mcp__notion__*"
     ],
     "defaultMode": "bypassPermissions"
   },
