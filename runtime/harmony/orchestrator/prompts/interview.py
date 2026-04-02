@@ -206,8 +206,8 @@ def _q_deployment(ctx: dict) -> str:
 
 
 def generate_prd(context: dict) -> str:
-    parts = [
-        "Generate docs/prd.md with the following specs:\n",
+    # -- Collect interview context ----------------------------------------
+    ctx_lines = [
         f"Project: {context.get('user_request', '')}",
         f"Type: {context.get('project_type', '')}",
         f"Target users: {context.get('target_users', '')}",
@@ -218,18 +218,127 @@ def generate_prd(context: dict) -> str:
     ]
     for key in ("auth", "design", "monetization", "deployment"):
         if context.get(key):
-            parts.append(f"{key.title()}: {context[key]}")
+            ctx_lines.append(f"{key.title()}: {context[key]}")
+    context_block = "\n".join(ctx_lines)
 
-    parts.append(
-        "\nStructure: Overview, Problem Statement, Target Users, Core Features, "
-        "Technical Architecture, Data Model, API Design, UI/UX, Non-Functional Requirements, "
-        "Success Metrics, Out of Scope, Open Questions."
-    )
-    parts.append(
-        '\nAfter writing, call harmony_pipeline_next with '
+    return (
+        "Generate docs/prd.md — a COMPREHENSIVE Product Requirements Document.\n"
+        "Target length: at least 200 lines. Be specific and concrete, not generic.\n\n"
+        "=== INTERVIEW CONTEXT ===\n"
+        f"{context_block}\n\n"
+        "=== GLOBAL RULES ===\n"
+        "- Write the PRD in the SAME LANGUAGE the user used during the interview.\n"
+        "- Use the interview context to INFER any missing details. Make reasonable "
+        "assumptions based on the project type, stack, and target users.\n"
+        "- If a detail truly cannot be inferred, make a sensible default choice and "
+        'record it under "Open Questions" so the user can revisit it.\n'
+        "- Do NOT leave any section blank or write placeholder text like 'TBD'.\n\n"
+        "=== REQUIRED SECTIONS (write each one in full detail) ===\n\n"
+        "## 1. Overview\n"
+        "- Project name\n"
+        "- One-line description (what it does, for whom)\n"
+        "- Tech stack summary (language, framework, database, deployment)\n\n"
+        "## 2. Problem Statement\n"
+        "- The specific pain point users face today\n"
+        "- Current alternatives / workarounds the user might try\n"
+        "- Why those alternatives are insufficient (cost, complexity, limitations)\n\n"
+        "## 3. Target Users\n"
+        "- Primary user persona: who they are, their role, their technical level\n"
+        "- Environment: where and how they will use this (desktop, mobile, CLI, etc.)\n"
+        "- Key motivations and frustrations\n\n"
+        "## 4. Core Features\n"
+        "For EACH feature listed in the context, write:\n"
+        "- **Description**: What the feature does in 2-3 sentences\n"
+        "- **User flow**: Step-by-step from the user's perspective "
+        "(e.g., 1. User clicks X → 2. System shows Y → 3. User confirms → 4. Result)\n"
+        "- **Error / failure scenarios**: What can go wrong and how the system handles it "
+        "(e.g., network failure → retry with exponential backoff; invalid input → "
+        "inline validation message)\n"
+        "- **Acceptance criteria**: 3-5 testable statements "
+        '(e.g., "Given a logged-in user, when they submit the form with valid data, '
+        'then a new record is created and a success toast appears within 2 seconds")\n\n'
+        "## 5. Technical Architecture\n"
+        "- **System component diagram**: Draw an ASCII diagram showing all major "
+        "components (client, server, database, external services, queues, etc.) "
+        "and the connections between them.\n"
+        "- **Data flow**: Describe the step-by-step sequence for the MAIN user flow, "
+        "from the moment the user triggers an action to the final response. "
+        "Example format:\n"
+        "  1. User submits form in React component\n"
+        "  2. Frontend sends POST /api/resource with JSON body\n"
+        "  3. API middleware validates JWT token\n"
+        "  4. Controller calls service layer\n"
+        "  5. Service writes to PostgreSQL via Prisma\n"
+        "  6. Service publishes event to queue\n"
+        "  7. Response 201 returned with created resource\n"
+        "- **Component responsibilities**: For each component, list what it owns "
+        "and which other components it communicates with (and how: REST, WebSocket, "
+        "direct function call, message queue, etc.)\n\n"
+        "## 6. Data Model\n"
+        "- Full schema for EVERY entity: field name, type, constraints "
+        "(NOT NULL, UNIQUE, DEFAULT, etc.), and relationships (FK references)\n"
+        "- If the stack uses SQL: provide actual CREATE TABLE statements\n"
+        "- If NoSQL: provide the document structure with types\n"
+        "- Index strategy: list indexes needed for performance-critical queries "
+        "and explain why each index exists\n\n"
+        "## 7. API Design\n"
+        "For EACH endpoint:\n"
+        "- HTTP method + path (e.g., POST /api/v1/users)\n"
+        "- Brief description\n"
+        "- Authentication: required or public\n"
+        "- Request body: full JSON example with realistic sample data\n"
+        "- Success response: status code + full JSON example\n"
+        "- Error responses: list each error case with status code and JSON body\n"
+        "Example:\n"
+        "```\n"
+        "POST /api/v1/tasks\n"
+        "Auth: Bearer token required\n"
+        "Request:\n"
+        '  { "title": "Buy groceries", "due_date": "2025-03-15" }\n'
+        "Response 201:\n"
+        '  { "id": "abc-123", "title": "Buy groceries", "due_date": "2025-03-15", '
+        '"status": "pending", "created_at": "2025-03-10T09:00:00Z" }\n'
+        "Error 401:\n"
+        '  { "error": "unauthorized", "message": "Invalid or expired token" }\n'
+        "Error 422:\n"
+        '  { "error": "validation_error", "details": [{"field": "title", '
+        '"message": "must not be empty"}] }\n'
+        "```\n\n"
+        "## 8. UI/UX\n"
+        "- Design principles (e.g., mobile-first, accessibility-first, minimal clicks)\n"
+        "- Key screens: list each screen with its purpose and main elements\n"
+        "- Layout structure: describe the overall layout "
+        "(sidebar + content, top nav + cards, etc.)\n"
+        "- Responsive behavior: how the layout adapts to mobile vs desktop\n\n"
+        "## 9. Non-Functional Requirements\n"
+        "Provide SPECIFIC numbers for each:\n"
+        "- Performance: target response time (e.g., API p95 < 200ms, page load < 2s)\n"
+        "- Availability: uptime target (e.g., 99.9%)\n"
+        "- Scalability: expected concurrent users / requests per second\n"
+        "- Security: authentication method, data encryption, input validation strategy\n"
+        "- Browser / platform support\n\n"
+        "## 10. Success Metrics\n"
+        "List 3-5 metrics that are QUANTIFIED and MEASURABLE:\n"
+        "- Example: 'User registration to first action < 3 minutes'\n"
+        "- Example: 'API error rate < 0.1% in production'\n"
+        "- Example: '80% of users complete onboarding without support'\n\n"
+        "## 11. Out of Scope\n"
+        "Explicitly list features and concerns that are NOT part of this version. "
+        "Be specific (e.g., 'Multi-language i18n support', 'Native mobile app', "
+        "'Advanced analytics dashboard').\n\n"
+        "## 12. Implementation Phases\n"
+        "Break the build into ordered phases based on dependency:\n"
+        "- Phase 1: Foundation — what must be built first (project setup, data model, auth)\n"
+        "- Phase 2: Core — the primary user-facing features\n"
+        "- Phase 3: Polish — secondary features, error handling, edge cases\n"
+        "- Phase 4: Launch — deployment, monitoring, documentation\n"
+        "For each phase, list the specific deliverables.\n\n"
+        "## 13. Open Questions\n"
+        "List any assumptions you made and decisions that need user confirmation.\n\n"
+        "=== END OF STRUCTURE ===\n\n"
+        'After writing the complete PRD to docs/prd.md, call harmony_pipeline_next with '
         '{"step":"generate_prd","success":true,"prd_path":"docs/prd.md"}'
     )
-    return "\n".join(parts)
 
 
 def prd_review() -> str:

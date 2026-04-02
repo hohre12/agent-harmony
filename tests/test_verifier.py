@@ -37,8 +37,99 @@ class TestRunCmd:
         assert code == -1
 
 
+def _build_deep_prd(
+    *,
+    total_lines: int = 120,
+    include_code_blocks: bool = True,
+    include_tables: bool = True,
+    include_schema: bool = True,
+    include_error_mentions: bool = True,
+    feature_lines: int = 12,
+    technical_lines: int = 10,
+    data_model_lines: int = 8,
+    api_lines: int = 10,
+) -> str:
+    """Helper: build a realistic PRD string with controllable depth."""
+    sections: list[str] = []
+    sections.append("# Project PRD\n")
+
+    # Put padding early (as an appendix section) so it doesn't inflate the
+    # last real section's content count.  We insert a placeholder here and
+    # replace it after we know how many lines are needed.
+    _PADDING_PLACEHOLDER = "<<PADDING>>"
+
+    sections.append("## Overview\nThis project is a web app.\nIt does things.\nMore detail here.\n")
+    sections.append("## Problem Statement\nUsers cannot do X.\nThis causes Y.\nWe need Z.\n")
+    sections.append("## Target Users\nDevelopers.\nDesigners.\nManagers.\n")
+
+    # Feature section
+    feat = ["## Core Features"]
+    for i in range(feature_lines):
+        feat.append(f"- Feature detail line {i}")
+    sections.append("\n".join(feat) + "\n")
+
+    # Technical section
+    tech = ["## Technical Architecture"]
+    for i in range(technical_lines):
+        tech.append(f"Architecture detail line {i}")
+    if include_code_blocks:
+        tech.append("```\nservice -> db -> cache\n```")
+    sections.append("\n".join(tech) + "\n")
+
+    # Data model section
+    dm = ["## Data Model"]
+    for i in range(data_model_lines):
+        dm.append(f"Model detail line {i}")
+    if include_schema:
+        dm.append("```sql\nCREATE TABLE users (id serial primary key, name text);\n```")
+    if include_tables:
+        dm.append("| Column | Type | Description |")
+        dm.append("|--------|------|-------------|")
+        dm.append("| id | int | Primary key |")
+    sections.append("\n".join(dm) + "\n")
+
+    # API section
+    api = ["## API Design"]
+    for i in range(api_lines):
+        api.append(f"API detail line {i}")
+    if include_code_blocks:
+        api.append('```json\n{"status": "ok"}\n```')
+    if include_error_mentions:
+        api.append("On error, the API returns a 4xx status with an error message.")
+        api.append("Failure scenarios include network timeouts and auth failures.")
+    sections.append("\n".join(api) + "\n")
+
+    # Appendix section — padding goes here so it doesn't inflate real sections
+    sections.append("## Appendix\n" + _PADDING_PLACEHOLDER)
+
+    body = "\n".join(sections)
+    # Calculate how many padding lines we need
+    current = len(body.replace(_PADDING_PLACEHOLDER, "").splitlines())
+    if current < total_lines:
+        padding = "\n".join([f"Additional note {i}." for i in range(total_lines - current)])
+    else:
+        padding = "Supplementary notes."
+    body = body.replace(_PADDING_PLACEHOLDER, padding)
+    return body
+
+
 class TestVerifyPrdSections:
-    def test_valid_prd(self, tmp_path):
+    def test_valid_prd_with_depth(self, tmp_path):
+        """A fully fleshed-out PRD passes all checks."""
+        prd = tmp_path / "prd.md"
+        prd.write_text(_build_deep_prd())
+        result = verify_prd_sections(str(prd))
+        assert result["exists"]
+        assert result["valid"]
+        assert result["missing_sections"] == []
+        assert result["depth_issues"] == []
+        assert result["has_code_blocks"]
+        assert result["has_tables"]
+        assert result["error_mention_count"] >= 1
+
+    def test_valid_prd_sections_only(self, tmp_path):
+        """Legacy-style test: sections present but PRD is thin (< 100 lines, no code blocks).
+        This should now be INVALID due to critical depth issues."""
         prd = tmp_path / "prd.md"
         prd.write_text(
             "# Project\n## Overview\nStuff\n## Problem Statement\nStuff\n"
@@ -47,8 +138,10 @@ class TestVerifyPrdSections:
         )
         result = verify_prd_sections(str(prd))
         assert result["exists"]
-        assert result["valid"]
         assert result["missing_sections"] == []
+        # But should fail due to depth issues (too short, no code blocks)
+        assert not result["valid"]
+        assert len(result["depth_issues"]) > 0
 
     def test_missing_sections(self, tmp_path):
         prd = tmp_path / "prd.md"
@@ -62,6 +155,141 @@ class TestVerifyPrdSections:
         result = verify_prd_sections("/nonexistent/prd.md")
         assert not result["exists"]
         assert not result["valid"]
+
+    # --- Minimum PRD length ---
+
+    def test_prd_under_100_lines_invalid(self, tmp_path):
+        """A PRD with all sections but only 50 lines should fail."""
+        prd = tmp_path / "prd.md"
+        prd.write_text(_build_deep_prd(total_lines=50))
+        result = verify_prd_sections(str(prd))
+        assert not result["valid"]
+        assert any("100" in issue for issue in result["depth_issues"])
+
+    def test_prd_over_100_lines_no_length_issue(self, tmp_path):
+        """A PRD with 120 lines should not trigger the length issue."""
+        prd = tmp_path / "prd.md"
+        prd.write_text(_build_deep_prd(total_lines=120))
+        result = verify_prd_sections(str(prd))
+        assert not any("100" in issue and "lines" in issue for issue in result["depth_issues"])
+
+    # --- Section depth thresholds ---
+
+    def test_shallow_feature_section(self, tmp_path):
+        """Feature section with < 10 content lines should be flagged as shallow."""
+        prd = tmp_path / "prd.md"
+        prd.write_text(_build_deep_prd(feature_lines=3))
+        result = verify_prd_sections(str(prd))
+        assert any("feature" in s for s in result["shallow_sections"])
+
+    def test_deep_feature_section_not_shallow(self, tmp_path):
+        """Feature section with >= 10 content lines should NOT be shallow."""
+        prd = tmp_path / "prd.md"
+        prd.write_text(_build_deep_prd(feature_lines=12))
+        result = verify_prd_sections(str(prd))
+        assert not any("feature" in s for s in result["shallow_sections"])
+
+    def test_shallow_technical_section(self, tmp_path):
+        """Technical section with < 8 content lines should be flagged."""
+        prd = tmp_path / "prd.md"
+        prd.write_text(_build_deep_prd(technical_lines=2))
+        result = verify_prd_sections(str(prd))
+        assert any("technical" in s for s in result["shallow_sections"])
+
+    def test_shallow_api_section(self, tmp_path):
+        """API section with < 8 content lines should be flagged."""
+        prd = tmp_path / "prd.md"
+        # Disable code blocks and error mentions in API section so only
+        # api_lines count toward the section's content.
+        prd.write_text(_build_deep_prd(
+            api_lines=2, include_code_blocks=False,
+            include_error_mentions=False, include_schema=False,
+        ))
+        result = verify_prd_sections(str(prd))
+        assert any("api" in s for s in result["shallow_sections"])
+
+    def test_shallow_data_model_section(self, tmp_path):
+        """Data model section with < 5 content lines should be flagged."""
+        prd = tmp_path / "prd.md"
+        # Disable schema and tables so only data_model_lines count.
+        prd.write_text(_build_deep_prd(
+            data_model_lines=1, include_schema=False,
+            include_tables=False, include_code_blocks=False,
+        ))
+        result = verify_prd_sections(str(prd))
+        assert any("data model" in s for s in result["shallow_sections"])
+
+    # --- Content depth indicators ---
+
+    def test_no_code_blocks_flagged(self, tmp_path):
+        """PRD without code blocks should have a depth issue and be invalid."""
+        prd = tmp_path / "prd.md"
+        prd.write_text(_build_deep_prd(include_code_blocks=False, include_schema=False))
+        result = verify_prd_sections(str(prd))
+        assert not result["has_code_blocks"]
+        assert not result["valid"]
+        assert any("code block" in issue for issue in result["depth_issues"])
+
+    def test_has_tables_detected(self, tmp_path):
+        """PRD with table markers should set has_tables=True."""
+        prd = tmp_path / "prd.md"
+        prd.write_text(_build_deep_prd(include_tables=True))
+        result = verify_prd_sections(str(prd))
+        assert result["has_tables"]
+
+    def test_no_tables_detected(self, tmp_path):
+        """PRD without table markers should set has_tables=False."""
+        prd = tmp_path / "prd.md"
+        prd.write_text(_build_deep_prd(include_tables=False))
+        result = verify_prd_sections(str(prd))
+        assert not result["has_tables"]
+
+    def test_no_schema_evidence_flagged(self, tmp_path):
+        """PRD without schema/CREATE TABLE/JSON should flag depth issue."""
+        prd = tmp_path / "prd.md"
+        prd.write_text(_build_deep_prd(include_schema=False, include_code_blocks=False))
+        result = verify_prd_sections(str(prd))
+        assert any("schema" in issue.lower() or "json" in issue.lower()
+                    for issue in result["depth_issues"])
+
+    def test_no_error_mentions_flagged(self, tmp_path):
+        """PRD without error/failure mentions should flag depth issue."""
+        prd = tmp_path / "prd.md"
+        prd.write_text(_build_deep_prd(include_error_mentions=False))
+        result = verify_prd_sections(str(prd))
+        assert any("error" in issue or "failure" in issue for issue in result["depth_issues"])
+        assert result["error_mention_count"] == 0
+
+    def test_error_mentions_counted(self, tmp_path):
+        """PRD with error mentions should report the count."""
+        prd = tmp_path / "prd.md"
+        prd.write_text(_build_deep_prd(include_error_mentions=True))
+        result = verify_prd_sections(str(prd))
+        assert result["error_mention_count"] >= 2  # "error" + "failure" in the helper
+
+    # --- Return structure backward compatibility ---
+
+    def test_return_structure_has_all_fields(self, tmp_path):
+        """All expected fields are present in the return dict."""
+        prd = tmp_path / "prd.md"
+        prd.write_text(_build_deep_prd())
+        result = verify_prd_sections(str(prd))
+        assert "exists" in result
+        assert "missing_sections" in result
+        assert "shallow_sections" in result
+        assert "depth_issues" in result
+        assert "has_tables" in result
+        assert "has_code_blocks" in result
+        assert "error_mention_count" in result
+        assert "valid" in result
+        assert "file_lines" in result
+
+    def test_file_not_found_return_structure(self):
+        """FILE_NOT_FOUND path should still return backward-compatible dict."""
+        result = verify_prd_sections("/nonexistent/prd.md")
+        assert "exists" in result
+        assert "missing_sections" in result
+        assert "valid" in result
 
 
 class TestVerifyTaskStructure:

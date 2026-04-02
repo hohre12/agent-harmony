@@ -32,8 +32,12 @@ class TestPromptLength:
             self._check_length(text, f"interview_{q_id}")
 
     def test_generate_prd(self):
+        """generate_prd is intentionally long (~120 lines) — it specifies depth for each PRD section."""
         ctx = {"user_request": "test", "target_users": "devs", "tech_stack": "Next.js"}
-        self._check_length(prompts.generate_prd(ctx), "generate_prd")
+        text = prompts.generate_prd(ctx)
+        lines = text.strip().split("\n")
+        # Must be substantial (detailed section specs) but not unbounded
+        assert 80 <= len(lines) <= 200, f"generate_prd is {len(lines)} lines (expected 80-200)"
 
     def test_prd_review(self):
         self._check_length(prompts.prd_review(), "prd_review")

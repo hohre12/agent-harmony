@@ -97,11 +97,12 @@ def verify_file_sizes(cwd: str = ".") -> dict:
 
 
 def verify_prd_sections(prd_path: str = "docs/prd.md") -> dict:
-    """Check that a PRD file contains required sections."""
+    """Check that a PRD file contains required sections with content depth."""
     p = Path(prd_path)
     if not p.exists():
         return {"exists": False, "missing_sections": ["FILE_NOT_FOUND"], "valid": False}
-    content = p.read_text(encoding="utf-8", errors="ignore").lower()
+    content = p.read_text(encoding="utf-8", errors="ignore")
+    content_lower = content.lower()
     required_sections = [
         "overview",
         "problem",
@@ -115,30 +116,100 @@ def verify_prd_sections(prd_path: str = "docs/prd.md") -> dict:
     for section in required_sections:
         # Match section keyword in a header line (# or ##) — allow plural/suffix
         pattern = rf'(?:^|\n)#{{1,3}}\s+.*\b{re.escape(section)}'
-        if not re.search(pattern, content):
+        if not re.search(pattern, content_lower):
             missing.append(section)
-    # Check minimum content per section
-    shallow_sections = []
-    lines = content.splitlines()
+
+    # --- Section depth thresholds ---
+    # Map keywords to minimum content lines required
+    _section_min_lines: dict[str, int] = {
+        "feature": 10,
+        "technical": 8,
+        "architecture": 8,
+        "data model": 5,
+        "api": 8,
+    }
+
+    def _min_lines_for(header: str) -> int:
+        """Return the minimum content-line threshold for a section header."""
+        h = header.lower()
+        for keyword, minimum in _section_min_lines.items():
+            if keyword in h:
+                return minimum
+        return 3  # default for all other sections
+
+    # Walk sections and measure content lines
+    shallow_sections: list[str] = []
+    lines = content_lower.splitlines()
     current_section = ""
     section_content_lines = 0
     for line in lines:
         if line.strip().startswith("#"):
-            if current_section and section_content_lines < 3:
+            if current_section and section_content_lines < _min_lines_for(current_section):
                 shallow_sections.append(current_section)
             current_section = line.strip()
             section_content_lines = 0
         elif line.strip():
             section_content_lines += 1
     # Check last section
-    if current_section and section_content_lines < 3:
+    if current_section and section_content_lines < _min_lines_for(current_section):
         shallow_sections.append(current_section)
+
+    # --- Content depth indicators ---
+    depth_issues: list[str] = []
+    total_lines = len(lines)
+
+    # 1. Minimum PRD length
+    if total_lines < 100:
+        depth_issues.append(
+            f"PRD is only {total_lines} lines — minimum 100 expected for adequate depth"
+        )
+
+    # 2. Code blocks (``` markers) — schemas, API examples, architecture
+    has_code_blocks = "```" in content
+    if not has_code_blocks:
+        depth_issues.append(
+            "PRD contains no code blocks — expected schema definitions, "
+            "API examples, or architecture diagrams"
+        )
+
+    # 3. Table markers (|) — structured data
+    has_tables = bool(re.search(r'^\s*\|.*\|', content, re.MULTILINE))
+
+    # 4. Schema / structured-data evidence in data-model or API sections
+    has_schema_evidence = bool(
+        re.search(r'create\s+table', content_lower)
+        or re.search(r'schema', content_lower)
+        or re.search(r'(?:\{[\s\S]*?"[a-z_]+")', content)  # JSON-like object
+    )
+    if "data model" not in missing and "api" not in missing and not has_schema_evidence:
+        depth_issues.append(
+            "Data-model / API sections lack schema definitions, "
+            "CREATE TABLE statements, or JSON examples"
+        )
+
+    # 5. Error / failure scenario mentions
+    error_mentions = len(re.findall(r'\b(?:error|fail|failure|exception)\b', content_lower))
+    if error_mentions < 1:
+        depth_issues.append(
+            "PRD does not discuss error or failure scenarios"
+        )
+
+    # --- Determine validity ---
+    # Critical depth issues that make the PRD invalid:
+    #   - PRD under 100 lines
+    #   - No code blocks at all
+    has_critical_depth_issues = (total_lines < 100) or (not has_code_blocks)
+
     return {
         "exists": True,
         "missing_sections": missing,
         "shallow_sections": shallow_sections,
-        "valid": len(missing) == 0,
-        "file_lines": len(content.splitlines()),
+        "depth_issues": depth_issues,
+        "has_tables": has_tables,
+        "has_code_blocks": has_code_blocks,
+        "error_mention_count": error_mentions,
+        "valid": len(missing) == 0 and not has_critical_depth_issues,
+        "file_lines": total_lines,
     }
 
 
