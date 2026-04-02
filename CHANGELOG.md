@@ -2,6 +2,26 @@
 
 All notable changes to Agent Harmony will be documented in this file.
 
+## [1.0.2] - 2026-04-02
+
+### Added
+
+- **Server-side code quality verifiers** — 5 new checks that agents cannot self-report:
+  - Magic numbers: AST-based (Python), regex (JS/TS) detection of numeric literals that should be constants
+  - Duplicate code: sliding-window hash detection of 4+ line repeated blocks across files
+  - Unused imports: AST (Python), regex (JS/TS) with noqa/star/__all__/__init__ handling
+  - N+1 query patterns: loop+query detection for Python ORM and JS/TS await patterns
+  - Hardcoded strings: cross-file repeated string literal detection (3+ occurrences)
+- **Comprehensive review criteria** — audit/review/self-review now check: logic bugs, DRY violations, magic numbers, common components, naming, N+1 queries, performance, test quality
+- **CLAUDE.md user choice** — existing CLAUDE.md detected → user picks: keep+append / replace / skip
+- **Permission mode notice** — Shift+Tab reminder in skill completion reports and README
+
+### Changed
+
+- Production quality thresholds: max_file_lines 300→350, max_function_lines 40→50 (prevents over-fragmentation)
+- README EN/KO: rewritten with harness engineering narrative, strong first impression
+- `/harmony` shorthand documented alongside `/agent-harmony:harmony`
+
 ## [1.0.1] - 2026-04-01
 
 ### Architecture
