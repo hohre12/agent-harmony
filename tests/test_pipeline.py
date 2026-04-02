@@ -475,10 +475,11 @@ class TestBuildFlow:
         assert result["step"] == "fix"
 
     @patch("harmony.orchestrator.pipeline_build.verifier_frontend.cross_verify_quality_scores", _mock_quality_verified)
-    def test_quality_gate_fail_max_retries_escalates(self, state_path):
+    def test_quality_gate_fail_always_routes_to_fix(self, state_path):
+        """Quality gate failure always routes to fix — no escalation, no round limit."""
         state = SessionState(
             session_id="test", pipeline_phase="build",
-            tasks=[TaskState(id="1", title="Auth", status="in_progress", retry_count=2, max_retries=3)],
+            tasks=[TaskState(id="1", title="Auth", status="in_progress", retry_count=10)],
         )
         state.save(state_path)
 
@@ -489,12 +490,13 @@ class TestBuildFlow:
             json.dumps({"step": "quality_gate", "task_id": "1", "task_title": "Auth", "scores": scores}),
             state_path,
         ))
-        assert result["step"] == "escalate"
+        assert result["step"] == "fix"  # Always fix, never escalate
 
-    def test_audit_fail_3_rounds_escalates_no_autopass(self, state_path):
+    def test_audit_fail_always_routes_to_fix(self, state_path):
+        """Audit failure always routes to fix — no auto-pass, no round limit."""
         state = SessionState(
             session_id="test", pipeline_phase="build",
-            tasks=[TaskState(id="1", title="Auth", status="in_progress", audit_round=2,
+            tasks=[TaskState(id="1", title="Auth", status="in_progress", audit_round=10,
                              audit_nonce="test-nonce-123")],
         )
         state.save(state_path)
@@ -505,7 +507,7 @@ class TestBuildFlow:
                          "verdict": "NEEDS_FIX", "issues": []}),
             state_path,
         ))
-        assert result["step"] == "escalate"  # NOT auto-pass
+        assert result["step"] == "fix"  # Always fix, never escalate
 
     def test_audit_pass_moves_to_next_task(self, state_path):
         state = SessionState(
@@ -673,8 +675,9 @@ class TestVerifyFlow:
         ))
         assert result["step"] == "verify_fix"
 
-    def test_verify_max_rounds_escalates_to_user(self, state_path):
-        state = SessionState(session_id="test", pipeline_phase="verify", verify_round=2)
+    def test_verify_high_rounds_still_routes_to_fix(self, state_path):
+        """Verify always routes to fix regardless of round count — no escalation."""
+        state = SessionState(session_id="test", pipeline_phase="verify", verify_round=20)
         state.save(state_path)
 
         result = json.loads(pipeline_next(
@@ -682,9 +685,7 @@ class TestVerifyFlow:
                          "gaps": [{"feature": "Auth"}]}),
             state_path,
         ))
-        assert result["step"] == "verify_escalate"
-        assert result["expect"] == "user_input"
-        assert "AskUserQuestion" in result["prompt"]
+        assert result["step"] == "verify_fix"
 
     def test_verify_without_auditor_id_rejected(self, state_path):
         """Verify PRD without auditor_id is rejected."""

@@ -27,24 +27,7 @@ def _verify_check_auditor(data: dict) -> dict | None:
 
 
 def _verify_handle_gaps(state, gaps: list, verify_round: int) -> dict:
-    """Handle PRD compliance gaps — fix or escalate."""
-    if verify_round > 2:
-        gap_text = "\n".join(f"- {g}" for g in gaps[:10])
-        return make_response(
-            step="verify_escalate",
-            prompt=(
-                f"PRD verification failed after {verify_round} rounds.\n\n"
-                f"Remaining gaps:\n{gap_text}\n\n"
-                "You MUST call the AskUserQuestion tool to present these choices:\n"
-                "  a) Show details — I'll fix manually\n"
-                "  b) Accept gaps and continue to security hardening\n"
-                "  c) Try a different approach\n"
-                "  d) Abort\n"
-                "  → Recommended: b)\n\n"
-                "Interpret their answer and call harmony_pipeline_respond with the letter."
-            ),
-            expect="user_input",
-        )
+    """Handle PRD compliance gaps — always fix. No auto-pass, no round limit."""
     return make_response(
         step="verify_fix",
         prompt=prompts.verify_fix_gaps(gaps),
@@ -127,28 +110,7 @@ def _harden_check_auditor(data: dict) -> dict | None:
 
 
 def _harden_handle_criticals(state, data: dict, criticals: int, harden_round: int) -> dict:
-    """Handle critical security issues — fix or escalate."""
-    if harden_round > 2:
-        crit_text = "\n".join(
-            f"- {c.get('file','?')}:{c.get('line','?')} — {c.get('description','?')}"
-            for c in data.get("criticals", [])[:10]
-        )
-        return make_response(
-            step="harden_escalate",
-            prompt=(
-                f"Security hardening failed after {harden_round} rounds.\n"
-                f"{criticals} critical issue(s) remain.\n\n"
-                f"Issues:\n{crit_text}\n\n"
-                "You MUST call the AskUserQuestion tool to present these choices:\n"
-                "  a) Show details — I'll fix manually\n"
-                "  b) Accept risks and continue to delivery\n"
-                "  c) Try a different approach\n"
-                "  d) Abort\n"
-                "  → Recommended: a)\n\n"
-                "Interpret their answer and call harmony_pipeline_respond with the letter."
-            ),
-            expect="user_input",
-        )
+    """Handle critical security issues — always fix. No auto-pass, no round limit."""
     return make_response(
         step="harden_fix",
         prompt=prompts.harden_fix_criticals(data.get("criticals", [])),

@@ -228,7 +228,7 @@ For each issue: File:line, Severity (MUST-FIX/SHOULD-FIX), What, How to fix.
 If MUST-FIX issues found:
 1. Route to responsible agent → fix in worktree
 2. `{review_agent}` re-reviews fixed items only
-3. Max 2 fix rounds → escalate if unresolved
+3. Repeat until ALL MUST-FIX issues are resolved — no round limit
 {e2e_section}
 #### 6-4. Worktree Merge
 

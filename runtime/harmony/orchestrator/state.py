@@ -92,10 +92,11 @@ class TaskState:
     audit_nonce: str = ""  # Server-generated nonce for audit verification
 
     def is_terminal(self) -> bool:
-        """Return True if the task is in a terminal state (completed or exhausted retries)."""
-        return self.status == "completed" or (
-            self.status == "failed" and self.retry_count >= self.max_retries
-        )
+        """Return True if the task is in a terminal state (completed only).
+
+        Tasks never auto-terminate from retries — quality gate loops until thresholds are met.
+        """
+        return self.status == "completed"
 
     # Keys where lower is better (score must be <= threshold)
     _UPPER_BOUND_KEYS = frozenset({"max_file_lines", "max_function_lines", "security_critical", "a11y_critical", "design_token_violations"})

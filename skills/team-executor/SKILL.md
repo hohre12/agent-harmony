@@ -130,7 +130,7 @@ For each issue: File:line, Severity (MUST-FIX/SHOULD-FIX), What, How to fix.
 If MUST-FIX issues found:
 1. Route to responsible agent → fix in worktree
 2. `review_agent` re-reviews fixed items only
-3. Max 2 fix rounds → escalate if unresolved
+3. Repeat until ALL MUST-FIX issues are resolved — no round limit
 
 #### 6-3. E2E Testing (if applicable)
 - If `e2e_agent` exists in team_config: spawn for E2E testing

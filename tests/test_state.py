@@ -22,12 +22,9 @@ class TestTaskState:
         t = TaskState(id="1", title="T", status="completed")
         assert t.is_terminal()
 
-    def test_is_terminal_exhausted(self):
-        t = TaskState(id="1", title="T", status="failed", retry_count=3, max_retries=3)
-        assert t.is_terminal()
-
-    def test_not_terminal_failed_with_retries(self):
-        t = TaskState(id="1", title="T", status="failed", retry_count=1, max_retries=3)
+    def test_failed_is_never_terminal(self):
+        """Failed tasks are never terminal — quality loops until thresholds met."""
+        t = TaskState(id="1", title="T", status="failed", retry_count=100)
         assert not t.is_terminal()
 
     def test_checkpoint_fields(self):

@@ -191,15 +191,7 @@ def _handle_audit(state: SessionState, data: dict) -> dict:
         return _next_build_task(state)
     else:
         task.audit_round += 1
-        if task.audit_round >= 3:
-            return make_response(
-                step="escalate",
-                prompt=prompts.escalation(
-                    task_title, data.get("issues", []), task.quality_scores
-                ),
-                expect="user_input",
-                metadata={"task_id": task_id},
-            )
+        # No round limit — loop until audit passes
         return make_response(
             step="fix",
             prompt=prompts.fix_issues(task_id, data.get("issues", [])),
@@ -254,11 +246,12 @@ def _handle_fix(state: SessionState, data: dict) -> dict:
             expect="step_result",
             metadata={"task_id": task_id, "task_title": task_title},
         )
+    # Fix failed — retry fix, no escalation
     return make_response(
-        step="escalate",
-        prompt=prompts.escalation(task_title, [], None),
-        expect="user_input",
-        metadata={"task_id": task_id},
+        step="fix",
+        prompt=prompts.fix_issues(task_id, data.get("issues", [])),
+        expect="step_result",
+        metadata={"task_id": task_id, "task_title": task_title},
     )
 
 
@@ -266,16 +259,9 @@ def _build_fix_or_escalate(
     state: SessionState, task_id: str, task_title: str,
     issues: list[dict], scores: dict | None = None,
 ) -> dict:
-    """Route to fix or escalate based on retry count."""
+    """Always route to fix. Quality gate is non-negotiable — loop until thresholds are met."""
     task = state._task_by_id(task_id)
     task.retry_count += 1
-    if task.retry_count >= task.max_retries:
-        return make_response(
-            step="escalate",
-            prompt=prompts.escalation(task_title, issues, scores),
-            expect="user_input",
-            metadata={"task_id": task_id},
-        )
     return make_response(
         step="fix",
         prompt=prompts.fix_issues(task_id, issues),
