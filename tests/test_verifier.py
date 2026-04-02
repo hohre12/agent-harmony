@@ -424,6 +424,61 @@ class TestMeasureJsFunctions:
         assert result["max_function_lines"] == 16
         assert "bigFunc" in result["largest_function"]
 
+    def test_js_template_literals_not_miscounted(self, tmp_path):
+        """Template literals with braces should not inflate function size."""
+        import subprocess as sp
+        sp.run(["git", "init"], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "config", "user.email", "t@t.com"], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "config", "user.name", "T"], cwd=str(tmp_path), capture_output=True)
+
+        js_file = tmp_path / "render.js"
+        # 6-line function whose template literal contains extra braces
+        source = (
+            "function render() {\n"
+            "  const a = 1;\n"
+            "  const html = `<div>{some braces {nested}}</div>`;\n"
+            "  const b = 2;\n"
+            "  return html;\n"
+            "}\n"
+        )
+        js_file.write_text(source)
+
+        sp.run(["git", "add", "."], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "commit", "-m", "init"], cwd=str(tmp_path), capture_output=True)
+
+        result = verify_function_sizes(str(tmp_path))
+        assert result["verified"]
+        # The function is exactly 6 lines.  Without Node.js cleaning the
+        # template-literal braces would confuse brace counting.
+        assert result["max_function_lines"] == 6
+        assert result["largest_function"] == "render"
+
+    def test_js_comments_not_miscounted(self, tmp_path):
+        """Braces inside comments should not affect function measurement."""
+        import subprocess as sp
+        sp.run(["git", "init"], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "config", "user.email", "t@t.com"], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "config", "user.name", "T"], cwd=str(tmp_path), capture_output=True)
+
+        js_file = tmp_path / "util.js"
+        source = (
+            "function helper() {\n"
+            "  // closing brace in comment: }\n"
+            "  const x = 1;\n"
+            "  /* another } brace */\n"
+            "  return x;\n"
+            "}\n"
+        )
+        js_file.write_text(source)
+
+        sp.run(["git", "add", "."], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "commit", "-m", "init"], cwd=str(tmp_path), capture_output=True)
+
+        result = verify_function_sizes(str(tmp_path))
+        assert result["verified"]
+        assert result["max_function_lines"] == 6
+        assert result["largest_function"] == "helper"
+
 
 class TestVerifyDesignTokens:
     def test_detects_hardcoded_colors(self, tmp_path):
@@ -569,6 +624,335 @@ class TestVerifyBuildAndTests:
         from harmony.orchestrator.verifier_frontend import verify_build_and_tests
         result = verify_build_and_tests(str(tmp_path))
         assert "build" in result  # At least detected the project type
+
+
+class TestVerifyGoProject:
+    """Tests for Go project detection and verification."""
+
+    def test_detects_go_project(self, tmp_path):
+        """Go project with go.mod is detected."""
+        import subprocess as sp
+        sp.run(["git", "init"], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "config", "user.email", "t@t.com"], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "config", "user.name", "T"], cwd=str(tmp_path), capture_output=True)
+        (tmp_path / "go.mod").write_text("module example.com/test\n\ngo 1.21\n")
+        (tmp_path / "main.go").write_text('package main\n\nfunc main() {}\n')
+        sp.run(["git", "add", "."], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "commit", "-m", "init"], cwd=str(tmp_path), capture_output=True)
+        from unittest.mock import patch
+        from harmony.orchestrator.verifier_frontend import verify_build_and_tests
+        call_log = []
+
+        def mock_run_cmd(cmd, cwd=None, timeout=30):
+            call_log.append(cmd)
+            if cmd[:2] == ["go", "build"]:
+                return (0, "")
+            if cmd[:2] == ["go", "test"] and "-coverprofile=coverage.out" in cmd:
+                return (0, "ok  \texample.com/test\tcoverage: 85.0% of statements\n")
+            if cmd[:2] == ["go", "test"]:
+                return (0, "ok  \texample.com/test\t0.010s\n")
+            if cmd[0] == "golangci-lint":
+                return (0, "")
+            return (0, "")
+
+        with patch("harmony.orchestrator.verifier_frontend.run_cmd", side_effect=mock_run_cmd):
+            result = verify_build_and_tests(str(tmp_path))
+        assert result["build"] is True
+        assert result["tests"] is True
+        assert result["lint"] is True
+        assert result["test_coverage"] == 85.0
+
+    def test_go_build_failure(self, tmp_path):
+        """Go project with build failure."""
+        import subprocess as sp
+        sp.run(["git", "init"], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "config", "user.email", "t@t.com"], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "config", "user.name", "T"], cwd=str(tmp_path), capture_output=True)
+        (tmp_path / "go.mod").write_text("module example.com/test\n\ngo 1.21\n")
+        sp.run(["git", "add", "."], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "commit", "-m", "init"], cwd=str(tmp_path), capture_output=True)
+        from unittest.mock import patch
+        from harmony.orchestrator.verifier_frontend import verify_build_and_tests
+
+        def mock_run_cmd(cmd, cwd=None, timeout=30):
+            if cmd[:2] == ["go", "build"]:
+                return (1, "build error")
+            if cmd[:2] == ["go", "test"] and "-coverprofile=coverage.out" in cmd:
+                return (1, "")
+            if cmd[:2] == ["go", "test"]:
+                return (0, "ok")
+            if cmd[0] == "golangci-lint":
+                return (-1, "not found")  # not installed
+            return (0, "")
+
+        with patch("harmony.orchestrator.verifier_frontend.run_cmd", side_effect=mock_run_cmd):
+            result = verify_build_and_tests(str(tmp_path))
+        assert result["build"] is False
+        assert result["tests"] is True
+        assert "lint" not in result  # golangci-lint not available
+
+    def test_go_no_coverage_parsed_when_tests_fail(self, tmp_path):
+        """Coverage not parsed when go test with coverage fails."""
+        import subprocess as sp
+        sp.run(["git", "init"], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "config", "user.email", "t@t.com"], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "config", "user.name", "T"], cwd=str(tmp_path), capture_output=True)
+        (tmp_path / "go.mod").write_text("module example.com/test\n\ngo 1.21\n")
+        sp.run(["git", "add", "."], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "commit", "-m", "init"], cwd=str(tmp_path), capture_output=True)
+        from unittest.mock import patch
+        from harmony.orchestrator.verifier_frontend import verify_build_and_tests
+
+        def mock_run_cmd(cmd, cwd=None, timeout=30):
+            if cmd[:2] == ["go", "build"]:
+                return (0, "")
+            if cmd[:2] == ["go", "test"] and "-coverprofile=coverage.out" in cmd:
+                return (1, "FAIL")
+            if cmd[:2] == ["go", "test"]:
+                return (1, "FAIL")
+            if cmd[0] == "golangci-lint":
+                return (-1, "not found")
+            return (0, "")
+
+        with patch("harmony.orchestrator.verifier_frontend.run_cmd", side_effect=mock_run_cmd):
+            result = verify_build_and_tests(str(tmp_path))
+        assert result["build"] is True
+        assert result["tests"] is False
+        assert "test_coverage" not in result
+
+
+class TestVerifyRustProject:
+    """Tests for Rust project detection and verification."""
+
+    def test_detects_rust_project(self, tmp_path):
+        """Rust project with Cargo.toml is detected."""
+        import subprocess as sp
+        sp.run(["git", "init"], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "config", "user.email", "t@t.com"], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "config", "user.name", "T"], cwd=str(tmp_path), capture_output=True)
+        (tmp_path / "Cargo.toml").write_text('[package]\nname = "test"\nversion = "0.1.0"\n')
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "main.rs").write_text("fn main() {}\n")
+        sp.run(["git", "add", "."], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "commit", "-m", "init"], cwd=str(tmp_path), capture_output=True)
+        from unittest.mock import patch
+        from harmony.orchestrator.verifier_frontend import verify_build_and_tests
+
+        def mock_run_cmd(cmd, cwd=None, timeout=30):
+            if cmd[:2] == ["cargo", "build"]:
+                return (0, "")
+            if cmd[:2] == ["cargo", "test"]:
+                return (0, "test result: ok. 5 passed; 0 failed\n")
+            if cmd[:2] == ["cargo", "clippy"]:
+                return (0, "")
+            return (0, "")
+
+        with patch("harmony.orchestrator.verifier_frontend.run_cmd", side_effect=mock_run_cmd):
+            result = verify_build_and_tests(str(tmp_path))
+        assert result["build"] is True
+        assert result["tests"] is True
+        assert result["lint"] is True
+        # Rust coverage is intentionally omitted
+        assert "test_coverage" not in result
+
+    def test_rust_clippy_not_installed(self, tmp_path):
+        """Lint is omitted when clippy is not available."""
+        import subprocess as sp
+        sp.run(["git", "init"], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "config", "user.email", "t@t.com"], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "config", "user.name", "T"], cwd=str(tmp_path), capture_output=True)
+        (tmp_path / "Cargo.toml").write_text('[package]\nname = "test"\nversion = "0.1.0"\n')
+        sp.run(["git", "add", "."], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "commit", "-m", "init"], cwd=str(tmp_path), capture_output=True)
+        from unittest.mock import patch
+        from harmony.orchestrator.verifier_frontend import verify_build_and_tests
+
+        def mock_run_cmd(cmd, cwd=None, timeout=30):
+            if cmd[:2] == ["cargo", "build"]:
+                return (0, "")
+            if cmd[:2] == ["cargo", "test"]:
+                return (0, "ok")
+            if cmd[:2] == ["cargo", "clippy"]:
+                return (-1, "not found")
+            return (0, "")
+
+        with patch("harmony.orchestrator.verifier_frontend.run_cmd", side_effect=mock_run_cmd):
+            result = verify_build_and_tests(str(tmp_path))
+        assert result["build"] is True
+        assert result["tests"] is True
+        assert "lint" not in result
+
+    def test_rust_build_failure(self, tmp_path):
+        """Rust project with build failure."""
+        import subprocess as sp
+        sp.run(["git", "init"], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "config", "user.email", "t@t.com"], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "config", "user.name", "T"], cwd=str(tmp_path), capture_output=True)
+        (tmp_path / "Cargo.toml").write_text('[package]\nname = "test"\nversion = "0.1.0"\n')
+        sp.run(["git", "add", "."], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "commit", "-m", "init"], cwd=str(tmp_path), capture_output=True)
+        from unittest.mock import patch
+        from harmony.orchestrator.verifier_frontend import verify_build_and_tests
+
+        def mock_run_cmd(cmd, cwd=None, timeout=30):
+            if cmd[:2] == ["cargo", "build"]:
+                return (1, "error[E0308]: mismatched types")
+            if cmd[:2] == ["cargo", "test"]:
+                return (1, "FAILED")
+            if cmd[:2] == ["cargo", "clippy"]:
+                return (1, "warnings")
+            return (0, "")
+
+        with patch("harmony.orchestrator.verifier_frontend.run_cmd", side_effect=mock_run_cmd):
+            result = verify_build_and_tests(str(tmp_path))
+        assert result["build"] is False
+        assert result["tests"] is False
+        assert result["lint"] is False
+
+
+class TestVerifyJavaProject:
+    """Tests for Java project detection and verification."""
+
+    def test_detects_maven_project(self, tmp_path):
+        """Java project with pom.xml is detected and uses Maven."""
+        import subprocess as sp
+        sp.run(["git", "init"], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "config", "user.email", "t@t.com"], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "config", "user.name", "T"], cwd=str(tmp_path), capture_output=True)
+        (tmp_path / "pom.xml").write_text('<project></project>')
+        sp.run(["git", "add", "."], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "commit", "-m", "init"], cwd=str(tmp_path), capture_output=True)
+        from unittest.mock import patch
+        from harmony.orchestrator.verifier_frontend import verify_build_and_tests
+        call_log = []
+
+        def mock_run_cmd(cmd, cwd=None, timeout=30):
+            call_log.append(cmd)
+            if cmd[:2] == ["mvn", "compile"]:
+                return (0, "BUILD SUCCESS")
+            if cmd[:2] == ["mvn", "test"]:
+                return (0, "BUILD SUCCESS")
+            return (0, "")
+
+        with patch("harmony.orchestrator.verifier_frontend.run_cmd", side_effect=mock_run_cmd):
+            result = verify_build_and_tests(str(tmp_path))
+        assert result["build"] is True
+        assert result["tests"] is True
+        # Lint and coverage intentionally omitted for Java
+        assert "lint" not in result
+        assert "test_coverage" not in result
+        # Verify Maven commands were used, not Gradle
+        assert any(c[0] == "mvn" for c in call_log)
+
+    def test_detects_gradle_project(self, tmp_path):
+        """Java project with build.gradle is detected and uses Gradle."""
+        import subprocess as sp
+        sp.run(["git", "init"], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "config", "user.email", "t@t.com"], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "config", "user.name", "T"], cwd=str(tmp_path), capture_output=True)
+        (tmp_path / "build.gradle").write_text("apply plugin: 'java'\n")
+        sp.run(["git", "add", "."], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "commit", "-m", "init"], cwd=str(tmp_path), capture_output=True)
+        from unittest.mock import patch
+        from harmony.orchestrator.verifier_frontend import verify_build_and_tests
+        call_log = []
+
+        def mock_run_cmd(cmd, cwd=None, timeout=30):
+            call_log.append(cmd)
+            if cmd[:2] == ["gradle", "build"]:
+                return (0, "BUILD SUCCESSFUL")
+            if cmd[:2] == ["gradle", "test"]:
+                return (0, "BUILD SUCCESSFUL")
+            return (0, "")
+
+        with patch("harmony.orchestrator.verifier_frontend.run_cmd", side_effect=mock_run_cmd):
+            result = verify_build_and_tests(str(tmp_path))
+        assert result["build"] is True
+        assert result["tests"] is True
+        # Verify Gradle commands were used, not Maven
+        assert any(c[0] == "gradle" for c in call_log)
+        assert not any(c[0] == "mvn" for c in call_log)
+
+    def test_detects_gradle_kts_project(self, tmp_path):
+        """Java/Kotlin project with build.gradle.kts is detected and uses Gradle."""
+        import subprocess as sp
+        sp.run(["git", "init"], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "config", "user.email", "t@t.com"], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "config", "user.name", "T"], cwd=str(tmp_path), capture_output=True)
+        (tmp_path / "build.gradle.kts").write_text('plugins { java }\n')
+        sp.run(["git", "add", "."], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "commit", "-m", "init"], cwd=str(tmp_path), capture_output=True)
+        from unittest.mock import patch
+        from harmony.orchestrator.verifier_frontend import verify_build_and_tests
+
+        def mock_run_cmd(cmd, cwd=None, timeout=30):
+            if cmd[:2] == ["gradle", "build"]:
+                return (0, "BUILD SUCCESSFUL")
+            if cmd[:2] == ["gradle", "test"]:
+                return (0, "BUILD SUCCESSFUL")
+            return (0, "")
+
+        with patch("harmony.orchestrator.verifier_frontend.run_cmd", side_effect=mock_run_cmd):
+            result = verify_build_and_tests(str(tmp_path))
+        assert result["build"] is True
+        assert result["tests"] is True
+
+    def test_maven_build_failure(self, tmp_path):
+        """Maven project with build failure."""
+        import subprocess as sp
+        sp.run(["git", "init"], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "config", "user.email", "t@t.com"], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "config", "user.name", "T"], cwd=str(tmp_path), capture_output=True)
+        (tmp_path / "pom.xml").write_text('<project></project>')
+        sp.run(["git", "add", "."], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "commit", "-m", "init"], cwd=str(tmp_path), capture_output=True)
+        from unittest.mock import patch
+        from harmony.orchestrator.verifier_frontend import verify_build_and_tests
+
+        def mock_run_cmd(cmd, cwd=None, timeout=30):
+            if cmd[:2] == ["mvn", "compile"]:
+                return (1, "BUILD FAILURE")
+            if cmd[:2] == ["mvn", "test"]:
+                return (1, "BUILD FAILURE")
+            return (0, "")
+
+        with patch("harmony.orchestrator.verifier_frontend.run_cmd", side_effect=mock_run_cmd):
+            result = verify_build_and_tests(str(tmp_path))
+        assert result["build"] is False
+        assert result["tests"] is False
+
+
+class TestProjectDetectionPriority:
+    """Tests to verify correct project type detection ordering."""
+
+    def test_go_not_detected_without_go_mod(self, tmp_path):
+        """A directory with .go files but no go.mod is not detected as Go."""
+        import subprocess as sp
+        sp.run(["git", "init"], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "config", "user.email", "t@t.com"], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "config", "user.name", "T"], cwd=str(tmp_path), capture_output=True)
+        (tmp_path / "main.go").write_text("package main")
+        sp.run(["git", "add", "."], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "commit", "-m", "init"], cwd=str(tmp_path), capture_output=True)
+        from harmony.orchestrator.verifier_frontend import verify_build_and_tests
+        result = verify_build_and_tests(str(tmp_path))
+        assert result == {}
+
+    def test_python_takes_priority_over_go(self, tmp_path):
+        """When both pyproject.toml and go.mod exist, Python is chosen."""
+        import subprocess as sp
+        sp.run(["git", "init"], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "config", "user.email", "t@t.com"], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "config", "user.name", "T"], cwd=str(tmp_path), capture_output=True)
+        (tmp_path / "pyproject.toml").write_text('[project]\nname="test"')
+        (tmp_path / "go.mod").write_text("module test\n\ngo 1.21\n")
+        (tmp_path / "app.py").write_text("x = 1\n")
+        sp.run(["git", "add", "."], cwd=str(tmp_path), capture_output=True)
+        sp.run(["git", "commit", "-m", "init"], cwd=str(tmp_path), capture_output=True)
+        from harmony.orchestrator.verifier_frontend import verify_build_and_tests
+        result = verify_build_and_tests(str(tmp_path))
+        # Python project detected — should have "build" key from Python verifier
+        assert "build" in result
 
 
 class TestCrossVerifyQualityScores:

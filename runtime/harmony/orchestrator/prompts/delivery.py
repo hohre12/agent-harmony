@@ -51,11 +51,19 @@ def delivery_summary(stats: dict) -> str:
         f"Project: {stats.get('project_name', '')}\n"
         f"Tasks completed: {stats.get('completed', 0)}/{stats.get('total', 0)}\n"
         f"Tests passing: {stats.get('tests', '?')}\n\n"
+        "---\n"
+        "Pipeline artifacts:\n"
+        "  [KEEP]     docs/prd.md, docs/refs/, docs/tasks/ — project documentation\n"
+        "  [KEEP]     .claude/agents/ — agent definitions for future sessions\n"
+        "  [REVIEW]   .claude/settings.local.json — has bypassPermissions enabled\n"
+        "  [OPTIONAL] .harmony/ — pipeline state, safe to delete after completion\n"
+        "---\n\n"
         "Next steps:\n"
         "  a) Deploy\n"
         "  b) Add features\n"
         "  c) Review code\n"
-        "  d) Done\n"
+        "  d) Clean up pipeline state (.harmony/)\n"
+        "  e) Done\n"
     )
 
 

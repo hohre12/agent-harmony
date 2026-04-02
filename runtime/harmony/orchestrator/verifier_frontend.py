@@ -142,6 +142,73 @@ def _verify_python_project(cwd: str) -> dict:
     return results
 
 
+def _verify_go_project(cwd: str) -> dict:
+    """Run Go build/test/lint commands."""
+    results: dict = {}
+    code, out = run_cmd(["go", "build", "./..."], cwd=cwd, timeout=120)
+    results["build"] = code == 0
+    code, out = run_cmd(["go", "test", "./...", "-count=1"], cwd=cwd, timeout=120)
+    results["tests"] = code == 0
+    # Lint via golangci-lint (skip if not installed)
+    code_lint, out_lint = run_cmd(["golangci-lint", "run"], cwd=cwd, timeout=120)
+    if code_lint != -1:  # -1 means command not found
+        results["lint"] = code_lint == 0
+    # Coverage
+    code_cov, out_cov = run_cmd(
+        ["go", "test", "./...", "-coverprofile=coverage.out", "-covermode=atomic"],
+        cwd=cwd, timeout=120,
+    )
+    if code_cov == 0:
+        # Parse "coverage: XX.X% of statements" lines from output
+        for line in out_cov.split("\n"):
+            if "coverage:" in line and "%" in line:
+                m = re.search(r'coverage:\s+([\d.]+)%', line)
+                if m:
+                    try:
+                        results["test_coverage"] = float(m.group(1))
+                    except ValueError:
+                        pass
+    return results
+
+
+def _verify_rust_project(cwd: str) -> dict:
+    """Run Rust build/test/lint commands."""
+    results: dict = {}
+    code, out = run_cmd(["cargo", "build"], cwd=cwd, timeout=180)
+    results["build"] = code == 0
+    code, out = run_cmd(["cargo", "test"], cwd=cwd, timeout=180)
+    results["tests"] = code == 0
+    # Lint via cargo clippy (skip if not available)
+    code_lint, out_lint = run_cmd(["cargo", "clippy", "--", "-D", "warnings"], cwd=cwd, timeout=120)
+    if code_lint != -1:
+        results["lint"] = code_lint == 0
+    # Coverage: skip (Rust coverage tooling is complex)
+    # test_coverage intentionally omitted — will land in unverified
+    return results
+
+
+def _verify_java_project(cwd: str) -> dict:
+    """Run Java build/test commands (Maven or Gradle)."""
+    p = Path(cwd)
+    results: dict = {}
+    use_gradle = (p / "build.gradle").exists() or (p / "build.gradle.kts").exists()
+    if use_gradle:
+        code, out = run_cmd(["gradle", "build", "-x", "test"], cwd=cwd, timeout=180)
+        results["build"] = code == 0
+        code, out = run_cmd(["gradle", "test"], cwd=cwd, timeout=180)
+        results["tests"] = code == 0
+    else:
+        # Maven
+        code, out = run_cmd(["mvn", "compile", "-q"], cwd=cwd, timeout=180)
+        results["build"] = code == 0
+        code, out = run_cmd(["mvn", "test", "-q"], cwd=cwd, timeout=180)
+        results["tests"] = code == 0
+    # Lint: skip (checkstyle is complex to detect)
+    # test_coverage: skip (jacoco output parsing is complex)
+    # Both intentionally omitted — will land in unverified
+    return results
+
+
 def verify_build_and_tests(cwd: str = ".") -> dict:
     """Auto-detect and run build/test commands."""
     cwd = _safe_cwd(cwd)
@@ -150,6 +217,12 @@ def verify_build_and_tests(cwd: str = ".") -> dict:
         return _verify_node_project(cwd)
     if (p / "pyproject.toml").exists() or (p / "setup.py").exists():
         return _verify_python_project(cwd)
+    if (p / "go.mod").exists():
+        return _verify_go_project(cwd)
+    if (p / "Cargo.toml").exists():
+        return _verify_rust_project(cwd)
+    if (p / "pom.xml").exists() or (p / "build.gradle").exists() or (p / "build.gradle.kts").exists():
+        return _verify_java_project(cwd)
     return {}
 
 

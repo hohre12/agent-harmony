@@ -277,8 +277,51 @@ def _measure_python_functions(filepath: str, source: str) -> tuple[int, str]:
     return max_lines, largest
 
 
-def _measure_js_functions(source: str) -> tuple[int, str]:
-    """Measure largest function in JS/TS file via brace counting. Returns (max_lines, func_name)."""
+def _clean_js_source_via_node(filepath: str) -> str | None:
+    """Strip comments, strings, and template literals from a JS/TS file using Node.js.
+
+    Returns the cleaned source text, or *None* if Node.js is unavailable or
+    the script fails for any reason.
+    """
+    # Inline Node.js script that removes syntactic noise so that subsequent
+    # brace-counting is accurate.  Processing order matters:
+    #   1. multi-line comments   /*...*/
+    #   2. single-line comments  //...
+    #   3. template literals     `...`  (may span multiple lines)
+    #   4. single-quoted strings '...'
+    #   5. double-quoted strings "..."
+    # Replaced content is substituted with empty strings (comments) or ""
+    # (string-like constructs) so that line numbers are preserved.
+    node_script = (
+        "const s=require('fs').readFileSync(process.argv[1],'utf8');"
+        "let c=s"
+        r".replace(/\/\*[\s\S]*?\*\//g,function(m){return m.replace(/[^\n]/g,'')})"
+        r".replace(/\/\/[^\n]*/g,'')"
+        r".replace(/`[^`]*`/g,'\"\"')"
+        ".replace(/'[^']*'/g,'\"\"')"
+        ".replace(/\"[^\"]*\"/g,'\"\"');"
+        "process.stdout.write(c)"
+    )
+    try:
+        r = subprocess.run(
+            ["node", "-e", node_script, filepath],
+            capture_output=True, text=True, timeout=10,
+        )
+        if r.returncode == 0:
+            return r.stdout
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        pass
+    return None
+
+
+def _brace_count_functions(source: str) -> tuple[int, str]:
+    """Measure largest function in source via brace counting.
+
+    Expects *cleaned* source (comments and strings already stripped) for
+    accurate results, but also works on raw source as a fallback.
+
+    Returns ``(max_lines, func_name)``.
+    """
     lines = source.splitlines()
     max_lines = 0
     largest = ""
@@ -308,6 +351,26 @@ def _measure_js_functions(source: str) -> tuple[int, str]:
     return max_lines, largest
 
 
+def _measure_js_functions(source: str, filepath: str = "") -> tuple[int, str]:
+    """Measure largest function in a JS/TS file.
+
+    Uses Node.js to strip comments, strings, and template literals before
+    brace-counting, which is much more accurate than raw brace counting
+    (avoids false positives from braces inside template literals, JSX,
+    destructuring patterns in strings, etc.).
+
+    Falls back to raw-source brace counting when Node.js is unavailable.
+
+    Returns ``(max_lines, func_name)``.
+    """
+    if filepath:
+        cleaned = _clean_js_source_via_node(filepath)
+        if cleaned is not None:
+            return _brace_count_functions(cleaned)
+    # Fallback: brace-count on the raw source (less accurate)
+    return _brace_count_functions(source)
+
+
 def verify_function_sizes(cwd: str = ".") -> dict:
     """Measure the largest function by line count using Python AST for .py files, regex for others."""
     cwd = _safe_cwd(cwd)
@@ -333,7 +396,7 @@ def verify_function_sizes(cwd: str = ".") -> dict:
         if p.suffix == ".py":
             func_lines, func_name = _measure_python_functions(filepath, source)
         elif p.suffix in (".ts", ".tsx", ".js", ".jsx"):
-            func_lines, func_name = _measure_js_functions(source)
+            func_lines, func_name = _measure_js_functions(source, str(p))
         else:
             continue
         if func_lines > max_lines:
