@@ -41,10 +41,14 @@ Agent Harmony adds what's missing: **the entire development process**.
 /plugin marketplace add hohre12/jwbae-plugins
 /plugin install agent-harmony@jwbae-plugins
 
+# Official plugin command
 /agent-harmony:harmony a real-time chat app with rooms, auth, and file sharing
+
+# Shorthand that works in many installed environments after plugin install
+/harmony a real-time chat app with rooms, auth, and file sharing
 ```
 
-That's it. One command starts everything.
+That's the public installation path: marketplace → plugin install → run Harmony.
 
 ## What Happens After You Hit Enter
 
@@ -59,11 +63,11 @@ Phase 4 — Build (fully automatic)          For each task:
 Phase 5 — Delivery                         Production-ready project
 ```
 
-**You interact in Phase 1.** The rest is automated.
+**You interact most in Phase 1.** After that, Harmony runs the pipeline and only comes back when it needs approval, explicit manual override, or an abort decision.
 
 ## Harness Engineering
 
-Prompt engineering asks nicely. **Harness engineering makes it structurally impossible to produce bad output.**
+Prompt engineering asks nicely. **Harness engineering gives automation the best shot at its highest-quality output.**
 
 Every step in the pipeline is a constraint — not a suggestion.
 
@@ -85,14 +89,18 @@ Every step in the pipeline is a constraint — not a suggestion.
     Every agent knows: a different agent will blindly judge your work
     with zero context about your intentions. This changes first-pass quality.
 
- 5. Server-Side Verification (not self-reported)
-    Build, test, lint, coverage — measured by the server, not the agent.
-    Agents cannot claim "all tests pass" when they don't.
+  5. Server-Cross-Checked Verification
+     Build, test, lint, coverage — cross-checked outside the working agent where measurable.
+     Agents cannot quietly hand-wave measurable quality signals.
 
- 6. Infinite Quality Loop (no auto-pass, no round limit)
-    Fails audit? → fix → re-audit. Repeat.
-    Still failing? → escalates to you. Never silently passes.
+  6. Infinite Quality Loop (with user-approved takeover checkpoints)
+     Fails audit? → fix → re-audit. Repeat.
+     After repeated failures, Harmony pauses so you can keep retrying, take over manually, or abort.
 ```
+
+Harmony keeps automatic retries running by default. To control token/cost spend, it pauses after repeated failures and lets you choose: continue retrying, manual override, or abort.
+
+Manual override ends Harmony's automatic verification loop. From that point on, the user takes direct responsibility for the outcome.
 
 ### Quality Thresholds
 
@@ -127,6 +135,7 @@ Session crashed? Rate limited? Just run it again.
 
 ```bash
 /agent-harmony:harmony
+/harmony
 # → "Resume from task 15/23? (a) Resume (b) Start over"
 ```
 
@@ -152,6 +161,7 @@ State is saved after every step. Nothing is lost.
 | Command | What it does |
 |---------|-------------|
 | `/agent-harmony:harmony [idea]` | **The one command.** Idea → production-ready project |
+| `/harmony [idea]` | Shorthand used in many installed environments after plugin install |
 | `/project-init` | Initialize project structure (used internally) |
 | `/codebase-init` | Initialize from existing codebase |
 | `/generate-agents` | Create specialized agent team |
@@ -168,7 +178,7 @@ During `/project-init` or `/codebase-init`, Claude Code may switch from bypass t
 ## Installation
 
 ```bash
-# Add marketplace & install
+# Public installation path: add marketplace → install plugin
 /plugin marketplace add hohre12/jwbae-plugins
 /plugin install agent-harmony@jwbae-plugins
 ```

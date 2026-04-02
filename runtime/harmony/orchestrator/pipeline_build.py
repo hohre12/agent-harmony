@@ -20,7 +20,6 @@ _PROJECT_CWD = "."
 
 
 def _safe_get_task(state: SessionState, task_id: str, step_name: str = "build_task"):
-    """Safely get a task by ID. Returns (task, None) or (None, error_response)."""
     try:
         return state._task_by_id(task_id), None
     except ValueError:
@@ -48,6 +47,7 @@ def _handle_build(state: SessionState, data: dict, is_user_input: bool = False) 
             task, err = _safe_get_task(state, task_id, step_name="escalate")
             if err:
                 return _next_build_task(state)
+            assert task is not None
             task.status = "completed"
             task.completed_at = _now_iso()
             return _next_build_task(state)
@@ -115,6 +115,7 @@ def _handle_quality_gate(state: SessionState, data: dict) -> dict:
     task, err = _safe_get_task(state, task_id, step_name="quality_gate")
     if err:
         return err
+    assert task is not None
     task.quality_scores = scores
 
     # Server-side cross-verification of reported scores
@@ -182,6 +183,7 @@ def _handle_audit(state: SessionState, data: dict) -> dict:
     task, err = _safe_get_task(state, task_id, step_name="audit")
     if err:
         return err
+    assert task is not None
 
     # Verify audit nonce
     expected_nonce = task.audit_nonce
@@ -263,6 +265,7 @@ def _handle_design_audit(state: SessionState, data: dict) -> dict:
     task, err = _safe_get_task(state, task_id, step_name="design_audit")
     if err:
         return err
+    assert task is not None
 
     # Require auditor_id
     auditor_id = data.get("auditor_id", "")
@@ -319,6 +322,7 @@ def _build_fix_or_escalate(
     task, err = _safe_get_task(state, task_id, step_name="fix")
     if err:
         return err
+    assert task is not None
     task.retry_count += 1
     if task.retry_count >= 5 and task.retry_count % 5 == 0:
         # Escalate to user — no skip/auto-pass option

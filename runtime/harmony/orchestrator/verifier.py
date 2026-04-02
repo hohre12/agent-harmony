@@ -284,7 +284,10 @@ def _measure_python_functions(filepath: str, source: str) -> tuple[int, str]:
         tree = ast.parse(source)
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                func_lines = node.end_lineno - node.lineno + 1
+                end_lineno = getattr(node, "end_lineno", None)
+                if end_lineno is None:
+                    continue
+                func_lines = end_lineno - node.lineno + 1
                 if func_lines > max_lines:
                     max_lines = func_lines
                     largest = node.name
