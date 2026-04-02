@@ -21,13 +21,24 @@ def quality_gate(task_id: str, task_title: str, thresholds: dict) -> str:
         "5. FUNCTION SIZE: count lines of largest function → max_function_lines: number\n"
         "6. SECURITY: run scanner + grep for hardcoded secrets → security_critical: count\n"
         "   (Python: bandit -r . -f json, Node: npm audit --json)\n"
-        "   (grep -rn 'password.*=.*[\"\\']' for hardcoded secrets)\n\n"
+        "   (grep -rn 'password.*=.*[\"\\']' for hardcoded secrets)\n"
+        "7. ACCESSIBILITY (frontend only): → a11y_critical: count\n"
+        "   - If project has frontend (React/Next.js/Vue): run axe-core or eslint-plugin-jsx-a11y\n"
+        "   - Check: missing alt text, missing aria-labels, non-semantic elements, color contrast\n"
+        "   - If no frontend: a11y_critical: 0\n"
+        "8. FRONTEND DESIGN (frontend only — informational, not gated):\n"
+        "   - grep for hardcoded color values (e.g., #fff, rgb()) outside design token files\n"
+        "   - grep for hardcoded px values in layout (should use spacing tokens)\n"
+        "   - Report findings as warnings (not gate failures)\n\n"
+        "IMPORTANT: Report EXACT numbers for ALL metrics. If a metric cannot be measured\n"
+        "(e.g., no frontend = no a11y check), report the metric as 0 or true as appropriate.\n"
+        "Do NOT omit any metric — omitted metrics cause automatic gate failure.\n\n"
         f"Thresholds (ALL must be met): {threshold_text}\n\n"
         "Call harmony_pipeline_next with:\n"
         f'{{"step":"quality_gate","task_id":"{task_id}","task_title":"{task_title}","scores":{{\n'
         '  "build":true/false, "tests":true/false, "test_coverage":<N>,\n'
         '  "lint":true/false, "max_file_lines":<N>, "max_function_lines":<N>,\n'
-        '  "security_critical":<N>\n'
+        '  "security_critical":<N>, "a11y_critical":<N>\n'
         "}}"
     )
 
@@ -43,7 +54,9 @@ def production_audit(task_id: str, task_title: str) -> str:
         '  "You are a senior engineer performing a production audit.\n'
         "  You have NO context about how this code was built. You are an independent reviewer.\n"
         f'  Task: {task_title}\n'
-        "  1. Run: git diff --name-only HEAD~1 to find changed files\n"
+        "  1. Find the task branch base: git merge-base HEAD main (or develop/master)\n"
+        "     Then run: git diff --name-only <merge-base>...HEAD to find ALL changed files\n"
+        "     Do NOT use HEAD~1 — tasks may span multiple commits.\n"
         "  2. Read docs/prd.md for the relevant feature spec\n"
         "  3. Review ONLY the changed files. Be STRICT. Look for:\n"
         "     - PRD compliance: does the code implement what the spec says?\n"
@@ -52,9 +65,19 @@ def production_audit(task_id: str, task_title: str) -> str:
         "     - Edge cases: empty lists, zero values, boundary conditions\n"
         "     - Integration: imports resolve, API contracts match\n"
         "     - Code structure: no god files (>400 lines), clear separation\n"
-        "     - Test quality: are tests meaningful or just passing trivially?\n"
+        "     - Test quality: tests must have meaningful assertions — reject tests that\n"
+        "       only call functions without asserting results, or use trivial expect(true)\n"
+        "     - Frontend (if applicable):\n"
+        "       * Responsive design: components work at mobile/tablet/desktop widths\n"
+        "       * Empty states: what shows when data is empty or loading?\n"
+        "       * Error states: what shows when API calls fail?\n"
+        "       * Loading states: skeleton/spinner during async operations\n"
+        "       * Design token usage: colors/spacing from tokens, not hardcoded values\n"
+        "       * Accessibility: semantic HTML, aria attributes, keyboard navigation\n"
         '  4. For each issue: file:line, severity (MUST-FIX/SHOULD-FIX), what, how to fix\n'
         '  5. Default to NEEDS_FIX. Only verdict PASS if genuinely no issues found."\n\n'
         "After the Agent returns, call harmony_pipeline_next with:\n"
-        f'{{"step":"audit","task_id":"{task_id}","verdict":"PASS"/"NEEDS_FIX","issues":[...]}}'
+        f'{{"step":"audit","task_id":"{task_id}","auditor_id":"<agent-id-from-Agent-tool>","verdict":"PASS"/"NEEDS_FIX","issues":[...]}}\n\n'
+        "CRITICAL: auditor_id is REQUIRED. The pipeline will REJECT audit results without it.\n"
+        "Use the agent ID returned by the Agent tool."
     )

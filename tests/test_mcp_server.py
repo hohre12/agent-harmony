@@ -75,7 +75,7 @@ class TestToolCalls:
 
     def test_path_traversal_blocked(self):
         try:
-            handle_tool_call("harmony_orchestrate_status", {"state_path": "../../etc/passwd"})
+            result = handle_tool_call("harmony_pipeline_start", {"user_request": "test", "state_path": "../../../etc/state.json"})
             assert False, "Should have raised ValueError"
         except Exception as e:
             assert "traversal" in str(e).lower()
@@ -153,3 +153,37 @@ class TestToolCalls:
             assert False, "Should have raised"
         except ValueError as e:
             assert "Absolute path" in str(e)
+
+
+class TestAgentRoleValidation:
+    def test_path_traversal_in_agent_role(self):
+        """Verify agent_role with path traversal is rejected."""
+        resp = handle_message({
+            "jsonrpc": "2.0", "method": "tools/call", "id": 99,
+            "params": {
+                "name": "harmony_memory_save",
+                "arguments": {
+                    "agent_role": "../../etc/passwd",
+                    "category": "pattern",
+                    "content": "test",
+                },
+            },
+        })
+        result_text = resp["result"]["content"][0]["text"]
+        assert "Error" in result_text or "Invalid" in result_text
+
+    def test_slash_in_agent_role(self):
+        """Verify agent_role with slash is rejected."""
+        resp = handle_message({
+            "jsonrpc": "2.0", "method": "tools/call", "id": 100,
+            "params": {
+                "name": "harmony_memory_save",
+                "arguments": {
+                    "agent_role": "some/path",
+                    "category": "pattern",
+                    "content": "test",
+                },
+            },
+        })
+        result_text = resp["result"]["content"][0]["text"]
+        assert "Error" in result_text or "Invalid" in result_text

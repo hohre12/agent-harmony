@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -14,6 +15,46 @@ from harmony.orchestrator.state import SessionState, TaskState
 @pytest.fixture
 def state_path(tmp_path: Path) -> str:
     return str(tmp_path / "state.json")
+
+
+# --- Helpers for mocking verifier calls ---
+
+def _mock_build_evidence_ok(*args, **kwargs):
+    return {"has_changes": True, "files_changed": 5, "raw": "5 files changed"}
+
+
+def _mock_build_evidence_empty(*args, **kwargs):
+    return {"has_changes": False, "files_changed": 0, "raw": ""}
+
+
+def _mock_quality_verified(*args, **kwargs):
+    return {"verified": True, "mismatches": {}, "actual": {}, "warnings": [], "build_evidence": {}}
+
+
+def _mock_quality_mismatch(*args, **kwargs):
+    return {
+        "verified": False,
+        "mismatches": {"max_file_lines": {"reported": 200, "actual": 500}},
+        "actual": {"max_file_lines": 500},
+        "warnings": [],
+        "build_evidence": {},
+    }
+
+
+def _mock_prd_valid(*args, **kwargs):
+    return {"exists": True, "missing_sections": [], "valid": True, "file_lines": 100}
+
+
+def _mock_prd_invalid(*args, **kwargs):
+    return {"exists": True, "missing_sections": ["data model", "api"], "valid": False, "file_lines": 10}
+
+
+def _mock_task_structure_valid(*args, **kwargs):
+    return {"valid": True, "issues": [], "task_count": 2}
+
+
+def _mock_task_structure_invalid(*args, **kwargs):
+    return {"valid": False, "issues": ["Task 1: no subtasks defined"], "task_count": 2}
 
 
 class TestStartPipeline:
@@ -107,6 +148,7 @@ class TestInterviewFlow:
 
 
 class TestPRDFlow:
+    @patch("harmony.orchestrator.pipeline.verifier.verify_prd_sections", _mock_prd_valid)
     def test_prd_gen_success(self, state_path):
         state = SessionState(
             session_id="test",
@@ -121,6 +163,24 @@ class TestPRDFlow:
             state_path,
         ))
         assert result["step"] == "prd_review"
+
+    @patch("harmony.orchestrator.pipeline.verifier.verify_prd_sections", _mock_prd_invalid)
+    def test_prd_gen_missing_sections_retries(self, state_path):
+        """PRD with missing sections triggers re-generation."""
+        state = SessionState(
+            session_id="test",
+            pipeline_phase="prd_gen",
+            pipeline_step="generate",
+            interview_context={"user_request": "todo app"},
+        )
+        state.save(state_path)
+
+        result = json.loads(pipeline_next(
+            json.dumps({"step": "generate_prd", "success": True, "prd_path": "docs/prd.md"}),
+            state_path,
+        ))
+        assert result["step"] == "generate_prd"
+        assert "missing required sections" in result["prompt"]
 
     def test_prd_approve(self, state_path):
         state = SessionState(
@@ -171,7 +231,7 @@ class TestSetupFlow:
         # Trigger generate_tasks step
         pipeline_next(json.dumps({"step": "", "success": True}), state_path)
 
-        # Return empty tasks → should retry
+        # Return empty tasks -> should retry
         result = json.loads(pipeline_next(
             json.dumps({"step": "generate_tasks", "success": True, "tasks": []}),
             state_path,
@@ -189,13 +249,14 @@ class TestSetupFlow:
 
         pipeline_next(json.dumps({"step": "", "success": True}), state_path)
 
-        # Return string instead of list → should retry
+        # Return string instead of list -> should retry
         result = json.loads(pipeline_next(
             json.dumps({"step": "generate_tasks", "success": True, "tasks": "not a list"}),
             state_path,
         ))
         assert result["step"] == "generate_tasks"
 
+    @patch("harmony.orchestrator.pipeline_setup.verifier.verify_task_structure", _mock_task_structure_valid)
     def test_setup_generates_tasks_then_executor(self, state_path):
         state = SessionState(
             session_id="test",
@@ -221,6 +282,28 @@ class TestSetupFlow:
         loaded = SessionState.load(state_path)
         assert loaded.total_tasks == 2
 
+    @patch("harmony.orchestrator.pipeline_setup.verifier.verify_task_structure", _mock_task_structure_invalid)
+    def test_setup_generates_tasks_fails_vertical_slice(self, state_path):
+        """Tasks that fail vertical-slice validation are rejected."""
+        state = SessionState(
+            session_id="test",
+            pipeline_phase="setup",
+            setup_progress={"project_init": "done", "generate_agents": "done", "build_refs": "done"},
+        )
+        state.save(state_path)
+
+        pipeline_next(json.dumps({"step": "", "success": True}), state_path)
+
+        result = json.loads(pipeline_next(
+            json.dumps({"step": "generate_tasks", "success": True, "tasks": [
+                {"id": "1", "title": "Auth"},
+                {"id": "2", "title": "Dashboard"},
+            ]}),
+            state_path,
+        ))
+        assert result["step"] == "generate_tasks"
+        assert "validation FAILED" in result["prompt"]
+
     def test_setup_all_done_goes_to_build(self, state_path):
         state = SessionState(
             session_id="test",
@@ -239,6 +322,21 @@ class TestSetupFlow:
         assert loaded.pipeline_phase == "build"
 
 
+class TestSetupFlowDesignDirection:
+    def test_design_direction_skipped_for_cli(self, state_path):
+        """Verify design_direction is skipped for CLI projects."""
+        state = SessionState(
+            session_id="test", pipeline_phase="setup",
+            interview_context={"tech_stack": "Python + Click/Typer (CLI)", "design": ""},
+        )
+        state.save(state_path)
+        result = json.loads(pipeline_next(
+            json.dumps({"step": "", "success": True}), state_path,
+        ))
+        # Should skip to project_init, not design_direction
+        assert result["step"] != "design_direction"
+
+
 class TestBuildFlow:
     def test_resume_resets_in_progress_task(self, state_path):
         state = SessionState(
@@ -254,7 +352,7 @@ class TestBuildFlow:
         )
         state.save(state_path)
 
-        # Simulate resume — pipeline_next with empty triggers _next_build_task
+        # Simulate resume -- pipeline_next with empty triggers _next_build_task
         result = json.loads(pipeline_next(
             json.dumps({"step": "", "success": True}),
             state_path,
@@ -263,6 +361,7 @@ class TestBuildFlow:
         # Task 2 should be picked up (was reset from in_progress to pending)
         assert result["metadata"]["task_id"] == "2"
 
+    @patch("harmony.orchestrator.pipeline_build.verifier.verify_build_evidence", _mock_build_evidence_ok)
     def test_build_task_success_triggers_quality_gate(self, state_path):
         state = SessionState(session_id="test", pipeline_phase="build")
         state.save(state_path)
@@ -273,6 +372,20 @@ class TestBuildFlow:
         ))
         assert result["step"] == "quality_gate"
 
+    @patch("harmony.orchestrator.pipeline_build.verifier.verify_build_evidence", _mock_build_evidence_empty)
+    def test_build_task_no_evidence_retries(self, state_path):
+        """Build that produces no git changes is rejected."""
+        state = SessionState(session_id="test", pipeline_phase="build")
+        state.save(state_path)
+
+        result = json.loads(pipeline_next(
+            json.dumps({"step": "build_task", "task_id": "1", "task_title": "Auth", "success": True}),
+            state_path,
+        ))
+        assert result["step"] == "build_task"
+        assert "evidence check FAILED" in result["prompt"]
+
+    @patch("harmony.orchestrator.pipeline_build.verifier_frontend.cross_verify_quality_scores", _mock_quality_verified)
     def test_quality_gate_pass_triggers_audit(self, state_path):
         state = SessionState(
             session_id="test", pipeline_phase="build",
@@ -284,6 +397,7 @@ class TestBuildFlow:
             "build": True, "tests": True, "lint": True,
             "test_coverage": 80.0, "max_file_lines": 200,
             "max_function_lines": 40, "security_critical": 0,
+            "a11y_critical": 0,
         }
         result = json.loads(pipeline_next(
             json.dumps({"step": "quality_gate", "task_id": "1", "task_title": "Auth", "scores": scores}),
@@ -291,6 +405,28 @@ class TestBuildFlow:
         ))
         assert result["step"] == "audit"
 
+    @patch("harmony.orchestrator.pipeline_build.verifier_frontend.cross_verify_quality_scores", _mock_quality_mismatch)
+    def test_quality_gate_score_mismatch_triggers_fix(self, state_path):
+        """Cross-verification mismatch triggers fix/escalate."""
+        state = SessionState(
+            session_id="test", pipeline_phase="build",
+            tasks=[TaskState(id="1", title="Auth", status="in_progress")],
+        )
+        state.save(state_path)
+
+        scores = {
+            "build": True, "tests": True, "lint": True,
+            "test_coverage": 80.0, "max_file_lines": 200,
+            "max_function_lines": 40, "security_critical": 0,
+            "a11y_critical": 0,
+        }
+        result = json.loads(pipeline_next(
+            json.dumps({"step": "quality_gate", "task_id": "1", "task_title": "Auth", "scores": scores}),
+            state_path,
+        ))
+        assert result["step"] == "fix"
+
+    @patch("harmony.orchestrator.pipeline_build.verifier_frontend.cross_verify_quality_scores", _mock_quality_verified)
     def test_quality_gate_fail_triggers_fix(self, state_path):
         state = SessionState(
             session_id="test", pipeline_phase="build",
@@ -309,6 +445,7 @@ class TestBuildFlow:
         ))
         assert result["step"] == "fix"
 
+    @patch("harmony.orchestrator.pipeline_build.verifier_frontend.cross_verify_quality_scores", _mock_quality_verified)
     def test_quality_gate_fail_max_retries_escalates(self, state_path):
         state = SessionState(
             session_id="test", pipeline_phase="build",
@@ -328,12 +465,15 @@ class TestBuildFlow:
     def test_audit_fail_3_rounds_escalates_no_autopass(self, state_path):
         state = SessionState(
             session_id="test", pipeline_phase="build",
-            tasks=[TaskState(id="1", title="Auth", status="in_progress", audit_round=2)],
+            tasks=[TaskState(id="1", title="Auth", status="in_progress", audit_round=2,
+                             audit_nonce="test-nonce-123")],
         )
         state.save(state_path)
 
         result = json.loads(pipeline_next(
-            json.dumps({"step": "audit", "task_id": "1", "verdict": "NEEDS_FIX", "issues": []}),
+            json.dumps({"step": "audit", "task_id": "1", "auditor_id": "agent-test-12345",
+                         "audit_nonce": "test-nonce-123",
+                         "verdict": "NEEDS_FIX", "issues": []}),
             state_path,
         ))
         assert result["step"] == "escalate"  # NOT auto-pass
@@ -343,7 +483,8 @@ class TestBuildFlow:
             session_id="test",
             pipeline_phase="build",
             tasks=[
-                TaskState(id="1", title="Auth", status="in_progress"),
+                TaskState(id="1", title="Auth", status="in_progress",
+                          audit_nonce="test-nonce-123"),
                 TaskState(id="2", title="Dashboard", status="pending"),
             ],
             total_tasks=2,
@@ -351,7 +492,8 @@ class TestBuildFlow:
         state.save(state_path)
 
         result = json.loads(pipeline_next(
-            json.dumps({"step": "audit", "task_id": "1", "verdict": "PASS"}),
+            json.dumps({"step": "audit", "task_id": "1", "auditor_id": "agent-test-12345",
+                         "audit_nonce": "test-nonce-123", "verdict": "PASS"}),
             state_path,
         ))
         assert result["step"] == "build_task"
@@ -362,17 +504,42 @@ class TestBuildFlow:
         state = SessionState(
             session_id="test",
             pipeline_phase="build",
-            tasks=[TaskState(id="1", title="Auth", status="in_progress")],
+            tasks=[TaskState(id="1", title="Auth", status="in_progress",
+                             audit_nonce="test-nonce-123")],
             total_tasks=1,
         )
         state.save(state_path)
 
         result = json.loads(pipeline_next(
-            json.dumps({"step": "audit", "task_id": "1", "verdict": "PASS"}),
+            json.dumps({"step": "audit", "task_id": "1", "auditor_id": "agent-test-12345",
+                         "audit_nonce": "test-nonce-123", "verdict": "PASS"}),
             state_path,
         ))
         loaded = SessionState.load(state_path)
         assert loaded.pipeline_phase == "verify"
+
+    def test_audit_rejects_missing_auditor_id(self, state_path):
+        """Audit without auditor_id is rejected and must be re-submitted."""
+        state = SessionState(
+            session_id="test", pipeline_phase="build",
+            pipeline_step="audit_1",
+            tasks=[TaskState(id="1", title="Auth", status="in_progress",
+                             quality_scores={"build": True, "tests": True, "lint": True,
+                                             "test_coverage": 80.0, "max_file_lines": 200,
+                                             "max_function_lines": 40, "security_critical": 0,
+                                             "a11y_critical": 0})],
+        )
+        state.save(state_path)
+        result = json.loads(pipeline_next(
+            json.dumps({"step": "audit", "task_id": "1", "task_title": "Auth",
+                         "verdict": "PASS"}),  # no auditor_id
+            state_path,
+        ))
+        # Should be rejected -- task NOT completed
+        assert result["step"] == "audit"
+        assert "REJECTED" in result["prompt"]
+        loaded = SessionState.load(state_path)
+        assert loaded.tasks[0].status != "completed"
 
     def test_escalation_skip_goes_to_verify(self, state_path):
         state = SessionState(session_id="test", pipeline_phase="build", pipeline_step="escalate_1")
@@ -416,6 +583,23 @@ class TestBuildFlow:
         ))
         assert "retry" in result["step"]
 
+    def test_checkpoint_resume_uses_checkpoint_data(self, state_path):
+        """Verify that interrupted tasks with checkpoint data resume from checkpoint."""
+        state = SessionState(
+            session_id="test", pipeline_phase="build",
+            tasks=[TaskState(id="1", title="Auth", status="in_progress",
+                             checkpoint_step="3/5 files written",
+                             checkpoint="files: a.py, b.py, c.py")],
+        )
+        state.save(state_path)
+        # Trigger build phase by sending a generic step
+        result = json.loads(pipeline_next(
+            json.dumps({"step": "continue"}), state_path,
+        ))
+        assert result["step"] == "build_task"
+        assert "RESUME FROM CHECKPOINT" in result["prompt"]
+        assert "3/5 files written" in result["prompt"]
+
     def test_resume_continues_from_saved_state(self, state_path):
         state = SessionState(
             session_id="test",
@@ -430,7 +614,7 @@ class TestBuildFlow:
         )
         state.save(state_path)
 
-        # Start pipeline detects existing session → resume prompt
+        # Start pipeline detects existing session -> resume prompt
         result = json.loads(start_pipeline("", state_path))
         assert result["step"] == "resume"
         assert "build" in result["prompt"]
@@ -442,7 +626,7 @@ class TestVerifyFlow:
         state.save(state_path)
 
         result = json.loads(pipeline_next(
-            json.dumps({"step": "verify_prd", "gaps": []}),
+            json.dumps({"step": "verify_prd", "auditor_id": "agent-xyz", "gaps": []}),
             state_path,
         ))
         assert result["step"] == "harden_security"
@@ -454,20 +638,56 @@ class TestVerifyFlow:
         state.save(state_path)
 
         result = json.loads(pipeline_next(
-            json.dumps({"step": "verify_prd", "gaps": [{"feature": "Auth", "status": "partial"}]}),
+            json.dumps({"step": "verify_prd", "auditor_id": "agent-xyz",
+                         "gaps": [{"feature": "Auth", "status": "partial"}]}),
             state_path,
         ))
         assert result["step"] == "verify_fix"
 
-    def test_verify_max_rounds_skips_to_harden(self, state_path):
+    def test_verify_max_rounds_escalates_to_user(self, state_path):
         state = SessionState(session_id="test", pipeline_phase="verify", verify_round=2)
         state.save(state_path)
 
         result = json.loads(pipeline_next(
-            json.dumps({"step": "verify_prd", "gaps": [{"feature": "Auth"}]}),
+            json.dumps({"step": "verify_prd", "auditor_id": "agent-xyz",
+                         "gaps": [{"feature": "Auth"}]}),
             state_path,
         ))
+        assert result["step"] == "verify_escalate"
+        assert result["expect"] == "user_input"
+        assert "AskUserQuestion" in result["prompt"]
+
+    def test_verify_without_auditor_id_rejected(self, state_path):
+        """Verify PRD without auditor_id is rejected."""
+        state = SessionState(session_id="test", pipeline_phase="verify")
+        state.save(state_path)
+
+        result = json.loads(pipeline_next(
+            json.dumps({"step": "verify_prd", "gaps": []}),
+            state_path,
+        ))
+        assert result["step"] == "verify_prd"
+        assert "REJECTED" in result["prompt"]
+
+    def test_verify_escalation_accept_continues(self, state_path):
+        """Verify that accepting gaps during escalation moves to harden."""
+        state = SessionState(
+            session_id="test", pipeline_phase="verify",
+            pipeline_step="verify_escalate",
+        )
+        state.save(state_path)
+        result = json.loads(pipeline_respond("b", state_path))
         assert result["step"] == "harden_security"
+
+    def test_verify_escalation_abort(self, state_path):
+        """Verify that aborting during escalation ends pipeline."""
+        state = SessionState(
+            session_id="test", pipeline_phase="verify",
+            pipeline_step="verify_escalate",
+        )
+        state.save(state_path)
+        result = json.loads(pipeline_respond("d", state_path))
+        assert result["step"] == "done"
 
 
 class TestHardenFlow:
@@ -476,7 +696,7 @@ class TestHardenFlow:
         state.save(state_path)
 
         result = json.loads(pipeline_next(
-            json.dumps({"step": "harden_security", "critical_count": 0}),
+            json.dumps({"step": "harden_security", "auditor_id": "agent-xyz", "critical_count": 0}),
             state_path,
         ))
         assert result["step"] == "final_check"
@@ -488,10 +708,33 @@ class TestHardenFlow:
         state.save(state_path)
 
         result = json.loads(pipeline_next(
-            json.dumps({"step": "harden_security", "critical_count": 2, "criticals": [{"file": "a.py"}]}),
+            json.dumps({"step": "harden_security", "auditor_id": "agent-xyz",
+                         "critical_count": 2, "criticals": [{"file": "a.py"}]}),
             state_path,
         ))
         assert result["step"] == "harden_fix"
+
+    def test_harden_without_auditor_id_rejected(self, state_path):
+        """Harden security without auditor_id is rejected."""
+        state = SessionState(session_id="test", pipeline_phase="harden")
+        state.save(state_path)
+
+        result = json.loads(pipeline_next(
+            json.dumps({"step": "harden_security", "critical_count": 0}),
+            state_path,
+        ))
+        assert result["step"] == "harden_security"
+        assert "REJECTED" in result["prompt"]
+
+    def test_harden_escalation_accept_continues(self, state_path):
+        """Verify that accepting risks during escalation moves to delivery."""
+        state = SessionState(
+            session_id="test", pipeline_phase="harden",
+            pipeline_step="harden_escalate",
+        )
+        state.save(state_path)
+        result = json.loads(pipeline_respond("b", state_path))
+        assert result["step"] == "final_check"
 
 
 class TestDeliveryFlow:
@@ -522,3 +765,197 @@ class TestQuestionSequence:
         assert "design" in seq
         assert "auth" in seq
         assert "deployment" in seq
+
+
+class TestResumeFlow:
+    def test_resume_from_verify(self, state_path):
+        state = SessionState(session_id="test", pipeline_phase="verify")
+        state.save(state_path)
+        result = json.loads(start_pipeline("test", state_path))
+        assert result["step"] == "resume"
+
+    def test_resume_from_harden(self, state_path):
+        state = SessionState(session_id="test", pipeline_phase="harden")
+        state.save(state_path)
+        result = json.loads(start_pipeline("test", state_path))
+        assert result["step"] == "resume"
+
+    def test_resume_from_delivery(self, state_path):
+        state = SessionState(session_id="test", pipeline_phase="delivery")
+        state.save(state_path)
+        result = json.loads(start_pipeline("test", state_path))
+        assert result["step"] == "resume"
+
+    def test_resume_option_a_resumes(self, state_path):
+        """Verify choosing 'a' during resume actually resumes from current phase."""
+        state = SessionState(
+            session_id="test", pipeline_phase="build",
+            pipeline_step="awaiting_resume",
+            tasks=[TaskState(id="1", title="Auth", status="pending")],
+        )
+        state.save(state_path)
+        result = json.loads(pipeline_respond("a", state_path))
+        assert result["step"] == "build_task"  # Should resume to build
+
+    def test_resume_option_b_starts_over(self, state_path):
+        """Verify choosing 'b' during resume resets session."""
+        state = SessionState(
+            session_id="test", pipeline_phase="build",
+            pipeline_step="awaiting_resume",
+            interview_answers={"q1": "a1"},
+        )
+        state.save(state_path)
+        result = json.loads(pipeline_respond("b", state_path))
+        assert result["step"] == "init"
+        # Verify state was reset
+        loaded = SessionState.load(state_path)
+        assert loaded.interview_answers == {}
+
+
+class TestDesignDirection:
+    def test_design_direction_runs_for_frontend(self, state_path):
+        """Verify design_direction step is returned for React projects."""
+        state = SessionState(
+            session_id="test", pipeline_phase="setup",
+            interview_context={"tech_stack": "Next.js + TypeScript", "design": "Clean & minimal"},
+        )
+        state.save(state_path)
+        result = json.loads(pipeline_next(
+            json.dumps({"step": "", "success": True}), state_path,
+        ))
+        assert result["step"] == "design_direction"
+        assert "frontend-design" in result["prompt"] or "design" in result["prompt"].lower()
+
+
+class TestDesignAudit:
+    def test_frontend_task_triggers_design_audit(self, state_path):
+        """Frontend tasks should get design quality audit after production audit passes."""
+        state = SessionState(
+            session_id="test", pipeline_phase="build",
+            pipeline_step="audit_1",
+            tasks=[TaskState(id="1", title="Landing Page UI", status="in_progress",
+                             audit_nonce="test-nonce-123",
+                             quality_scores={"build": True, "tests": True, "lint": True,
+                                             "test_coverage": 80.0, "max_file_lines": 200,
+                                             "max_function_lines": 40, "security_critical": 0,
+                                             "a11y_critical": 0, "design_token_violations": 3})],
+        )
+        state.save(state_path)
+        result = json.loads(pipeline_next(
+            json.dumps({"step": "audit", "task_id": "1", "task_title": "Landing Page UI",
+                         "auditor_id": "agent-abc12345", "audit_nonce": "test-nonce-123",
+                         "verdict": "PASS"}),
+            state_path,
+        ))
+        assert result["step"] == "design_audit"
+        assert "Anti-AI" in result["prompt"] or "design" in result["prompt"].lower()
+
+    def test_non_frontend_task_skips_design_audit(self, state_path):
+        """Non-frontend tasks should skip design audit and complete directly."""
+        state = SessionState(
+            session_id="test", pipeline_phase="build",
+            pipeline_step="audit_1",
+            tasks=[TaskState(id="1", title="Auth API", status="in_progress",
+                             audit_nonce="test-nonce-123"),
+                   TaskState(id="2", title="Database Schema", status="pending")],
+            total_tasks=2,
+        )
+        state.save(state_path)
+        result = json.loads(pipeline_next(
+            json.dumps({"step": "audit", "task_id": "1", "task_title": "Auth API",
+                         "auditor_id": "agent-abc12345", "audit_nonce": "test-nonce-123",
+                         "verdict": "PASS"}),
+            state_path,
+        ))
+        # Should go directly to next build task, not design_audit
+        assert result["step"] == "build_task"
+        loaded = SessionState.load(state_path)
+        assert loaded.tasks[0].status == "completed"
+
+    def test_design_audit_pass_completes_task(self, state_path):
+        """Design audit PASS should complete the task."""
+        state = SessionState(
+            session_id="test", pipeline_phase="build",
+            pipeline_step="audit_1",
+            tasks=[TaskState(id="1", title="Dashboard UI", status="in_progress",
+                             audit_round=-1)],  # -1 = design audit in progress
+        )
+        state.save(state_path)
+        result = json.loads(pipeline_next(
+            json.dumps({"step": "design_audit", "task_id": "1", "task_title": "Dashboard UI",
+                         "auditor_id": "agent-test-12345", "verdict": "PASS"}),
+            state_path,
+        ))
+        loaded = SessionState.load(state_path)
+        assert loaded.tasks[0].status == "completed"
+
+    def test_design_audit_fail_routes_to_fix(self, state_path):
+        """Design audit NEEDS_FIX should route to fix step."""
+        state = SessionState(
+            session_id="test", pipeline_phase="build",
+            pipeline_step="audit_1",
+            tasks=[TaskState(id="1", title="Dashboard UI", status="in_progress",
+                             audit_round=-1)],
+        )
+        state.save(state_path)
+        result = json.loads(pipeline_next(
+            json.dumps({"step": "design_audit", "task_id": "1", "task_title": "Dashboard UI",
+                         "auditor_id": "agent-test-12345",
+                         "verdict": "NEEDS_FIX",
+                         "issues": [{"severity": "MUST-FIX", "file": "Dashboard.tsx",
+                                     "what": "hardcoded colors"}]}),
+            state_path,
+        ))
+        assert result["step"] == "fix"
+        loaded = SessionState.load(state_path)
+        assert loaded.tasks[0].audit_round == 0  # Reset for normal flow
+
+
+class TestAuditNonceField:
+    @patch("harmony.orchestrator.pipeline_build.verifier_frontend.cross_verify_quality_scores", _mock_quality_verified)
+    def test_nonce_stored_in_task_field(self, state_path):
+        """Verify audit_nonce is stored in TaskState.audit_nonce, not checkpoint."""
+        state = SessionState(
+            session_id="test", pipeline_phase="build",
+            pipeline_step="gate_1",
+            quality_thresholds={
+                "build": True, "tests": True, "lint": True,
+                "test_coverage": 70.0, "max_file_lines": 400,
+                "max_function_lines": 60, "security_critical": 0,
+                "a11y_critical": 0, "design_token_violations": 10,
+            },
+            tasks=[TaskState(id="1", title="Backend API", status="in_progress")],
+        )
+        state.save(state_path)
+
+        scores = {
+            "build": True, "tests": True, "lint": True,
+            "test_coverage": 80.0, "max_file_lines": 200,
+            "max_function_lines": 40, "security_critical": 0,
+            "a11y_critical": 0, "design_token_violations": 3,
+        }
+        result = json.loads(pipeline_next(
+            json.dumps({"step": "quality_gate", "task_id": "1", "task_title": "Backend API", "scores": scores}),
+            state_path,
+        ))
+        # Should move to audit step
+        if result["step"] == "audit":
+            # Load state and verify nonce is stored in audit_nonce field
+            loaded = SessionState.load(state_path)
+            task = loaded._task_by_id("1")
+            assert task.audit_nonce  # Should be non-empty
+            assert task.checkpoint == ""  # checkpoint should NOT be overwritten
+
+
+class TestUnknownPhaseRecovery:
+    def test_unknown_phase_recovers(self, state_path):
+        """Unknown pipeline phase triggers recovery."""
+        state = SessionState(
+            session_id="test", pipeline_phase="unknown_xyz",
+        )
+        state.save(state_path)
+        result = json.loads(pipeline_next(
+            json.dumps({"step": "anything"}), state_path,
+        ))
+        # Should recover — either return done or resume
+        assert result["step"] in ("done", "resume", "init")

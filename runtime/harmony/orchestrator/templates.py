@@ -24,67 +24,56 @@ def generate_template(template_name: str, config_json: str) -> str:
 # ====================================================================== #
 
 
-def _generate_team_executor(cfg: dict) -> str:
-    project = cfg.get("project_name", "Project")
+def _build_agent_table_rows(cfg: dict) -> str:
+    """Build the agent type table rows for the team-executor template."""
     main_arch = cfg.get("main_architect", "architect-agent")
     code_arch = cfg.get("code_architect", main_arch)
     db_agent = cfg.get("db_agent")
     review_agent = cfg.get("review_agent", main_arch)
     e2e_agent = cfg.get("e2e_agent")
     agent_table = cfg.get("agent_type_table", [])
-    git_mode = cfg.get("git_mode", "monorepo")
 
-    # Build agent type table rows
-    table_rows = (
-        f"| System architecture design, inter-agent coordination | `{main_arch}` |\n"
-    )
+    rows = f"| System architecture design, inter-agent coordination | `{main_arch}` |\n"
     if code_arch != main_arch:
-        table_rows += f"| Code structure design, specifications | `{code_arch}` |\n"
+        rows += f"| Code structure design, specifications | `{code_arch}` |\n"
     if db_agent:
-        table_rows += f"| DB schema, indexes, migrations | `{db_agent}` |\n"
-    # Handle both formats: list of dicts OR plain dict
+        rows += f"| DB schema, indexes, migrations | `{db_agent}` |\n"
     if isinstance(agent_table, dict):
         for agent_name, role in agent_table.items():
             if agent_name not in (main_arch, code_arch, db_agent, review_agent, e2e_agent):
-                table_rows += f"| {role} | `{agent_name}` |\n"
+                rows += f"| {role} | `{agent_name}` |\n"
     else:
         for entry in agent_table:
-            table_rows += f"| {entry.get('characteristics', '')} | `{entry.get('agent', '')}` |\n"
-    table_rows += f"| Code review, quality verification | `{review_agent}` |\n"
+            rows += f"| {entry.get('characteristics', '')} | `{entry.get('agent', '')}` |\n"
+    rows += f"| Code review, quality verification | `{review_agent}` |\n"
     if e2e_agent:
-        table_rows += f"| E2E test design and implementation | `{e2e_agent}` |\n"
+        rows += f"| E2E test design and implementation | `{e2e_agent}` |\n"
+    return rows
 
-    # Design agents section
+
+def _build_design_section(cfg: dict) -> str:
+    """Build the design agents section."""
+    main_arch = cfg.get("main_architect", "architect-agent")
+    code_arch = cfg.get("code_architect", main_arch)
+    db_agent = cfg.get("db_agent")
     if code_arch == main_arch:
-        design_agents = f"Default: {main_arch} (also handles code structure design)"
+        section = f"Default: {main_arch} (also handles code structure design)"
     else:
-        design_agents = f"Default: {code_arch} + {main_arch}"
+        section = f"Default: {code_arch} + {main_arch}"
     if db_agent:
-        design_agents += f"\n   - If DB-related subtasks exist: also add {db_agent}"
+        section += f"\n   - If DB-related subtasks exist: also add {db_agent}"
+    return section
 
-    # E2E section
-    e2e_section = ""
-    if e2e_agent:
-        e2e_section = f"""
-#### 6-3. E2E Testing (if applicable)
 
-- If E2E testing is needed: spawn `{e2e_agent}`
-"""
-
-    # Git commands — monorepo vs multi-git
+def _build_git_section(cfg: dict) -> tuple[str, str]:
+    """Build git-related sections. Returns (git_section, branch_create)."""
+    git_mode = cfg.get("git_mode", "monorepo")
     if git_mode == "multi-git":
         sub_map = cfg.get("sub_project_map", [])
         sub_map_table = "| Agent | Sub-project path | Domain |\n|---|---|---|\n"
         for row in sub_map:
             sub_map_table += f"| {row.get('agent','')} | {row.get('path','')} | {row.get('domain','')} |\n"
-
-        git_section = f"""
-## Sub-project Structure
-
-{sub_map_table}
-
-Note: Branch creation, commits, and pushes must run inside each sub-project directory.
-Do not run git commands from the root."""
+        git_section = f"\n## Sub-project Structure\n\n{sub_map_table}\n\nNote: Branch creation, commits, and pushes must run inside each sub-project directory.\nDo not run git commands from the root."
         branch_create = (
             "- Branch creation must be performed inside each sub-project directory\n"
             "- Branch name format: `feature/{tag}-{task-id}_{task-name}/{user}`"
@@ -92,6 +81,26 @@ Do not run git commands from the root."""
     else:
         git_section = ""
         branch_create = "- Branch name format: `feature/{tag}-{task-id}_{task-name}/{user}`"
+    return git_section, branch_create
+
+
+def _build_e2e_section(cfg: dict) -> str:
+    """Build optional E2E testing section."""
+    e2e_agent = cfg.get("e2e_agent")
+    if e2e_agent:
+        return f"\n#### 6-3. E2E Testing (if applicable)\n\n- If E2E testing is needed: spawn `{e2e_agent}`\n"
+    return ""
+
+
+def _generate_team_executor(cfg: dict) -> str:
+    project = cfg.get("project_name", "Project")
+    main_arch = cfg.get("main_architect", "architect-agent")
+    review_agent = cfg.get("review_agent", main_arch)
+
+    table_rows = _build_agent_table_rows(cfg)
+    design_agents = _build_design_section(cfg)
+    git_section, branch_create = _build_git_section(cfg)
+    e2e_section = _build_e2e_section(cfg)
 
     return f"""---
 name: team-executor

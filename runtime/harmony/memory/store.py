@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import os
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -51,19 +52,44 @@ class AgentMemory:
     agent_role: str
     entries: list[MemoryEntry] = field(default_factory=list)
 
-    def _path(self, base: str = MEMORY_DIR) -> Path:
-        return Path(base) / f"{self.agent_role}.json"
+    @staticmethod
+    def _validate_role(role: str) -> str:
+        """Validate agent_role for safe filesystem use."""
+        import re
+        if not role or not re.match(r'^[a-zA-Z0-9_-]+$', role):
+            raise ValueError(f"Invalid agent_role: {role!r}")
+        return role
 
-    def save(self, base: str = MEMORY_DIR) -> Path:
-        p = self._path(base)
+    def _path(self, base: str | None = None) -> Path:
+        return Path(base or MEMORY_DIR) / f"{self.agent_role}.json"
+
+    def save(self) -> Path:
+        """Persist memory to disk using atomic write."""
+        import tempfile
+        self._validate_role(self.agent_role)
+        p = self._path()
         p.parent.mkdir(parents=True, exist_ok=True)
-        data = {"agent_role": self.agent_role, "entries": [asdict(e) for e in self.entries]}
-        p.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        data = json.dumps(
+            {"agent_role": self.agent_role, "entries": [asdict(e) for e in self.entries]},
+            indent=2, ensure_ascii=False,
+        )
+        fd, tmp_path = tempfile.mkstemp(dir=str(p.parent), suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(data)
+            os.replace(tmp_path, str(p))
+        except BaseException:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
         return p
 
     @classmethod
-    def load(cls, agent_role: str, base: str = MEMORY_DIR) -> "AgentMemory":
-        p = Path(base) / f"{agent_role}.json"
+    def load(cls, agent_role: str, base: str | None = None) -> "AgentMemory":
+        cls._validate_role(agent_role)
+        p = Path(base or MEMORY_DIR) / f"{agent_role}.json"
         if not p.exists():
             return cls(agent_role=agent_role)
         data = json.loads(p.read_text(encoding="utf-8"))

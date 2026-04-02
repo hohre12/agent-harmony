@@ -106,3 +106,80 @@ class TestPromptCallbacks:
     def test_audit_has_next_hint(self):
         text = prompts.production_audit("1", "Auth")
         assert "harmony_pipeline_next" in text
+
+
+class TestQualityGatePrompt:
+    def test_contains_all_threshold_keys(self):
+        from harmony.orchestrator.state import DEFAULT_QUALITY_THRESHOLDS
+        prompt = prompts.quality_gate("1", "Auth", DEFAULT_QUALITY_THRESHOLDS)
+        for key in DEFAULT_QUALITY_THRESHOLDS:
+            assert key in prompt
+
+    def test_contains_null_metric_guidance(self):
+        from harmony.orchestrator.state import DEFAULT_QUALITY_THRESHOLDS
+        prompt = prompts.quality_gate("1", "Auth", DEFAULT_QUALITY_THRESHOLDS)
+        assert "omit" in prompt.lower() or "null" in prompt.lower() or "cannot be measured" in prompt.lower()
+
+    def test_contains_a11y_check(self):
+        from harmony.orchestrator.state import DEFAULT_QUALITY_THRESHOLDS
+        prompt = prompts.quality_gate("1", "Auth", DEFAULT_QUALITY_THRESHOLDS)
+        assert "a11y" in prompt.lower() or "accessibility" in prompt.lower()
+
+
+class TestProductionAuditPrompt:
+    def test_requires_agent_spawning(self):
+        prompt = prompts.production_audit("1", "Auth")
+        assert "Agent tool" in prompt or "spawn" in prompt.lower()
+
+    def test_requires_auditor_id(self):
+        prompt = prompts.production_audit("1", "Auth")
+        assert "auditor_id" in prompt
+
+    def test_uses_merge_base(self):
+        prompt = prompts.production_audit("1", "Auth")
+        assert "merge-base" in prompt
+        # The prompt mentions HEAD~1 only to warn AGAINST using it
+        assert "Do NOT use HEAD~1" in prompt or "Do not use HEAD~1" in prompt
+
+
+class TestSecurityReviewPrompt:
+    def test_requires_auditor_id(self):
+        prompt = prompts.harden_security_review()
+        assert "auditor_id" in prompt
+
+
+class TestDesignQualityAudit:
+    def test_contains_anti_ai_checklist(self):
+        from harmony.orchestrator.prompts.design import design_quality_audit
+        prompt = design_quality_audit("1", "Landing Page")
+        assert "Anti-AI" in prompt
+        assert "line-height" in prompt.lower() or "Line-height" in prompt
+        assert "typography" in prompt.lower()
+
+    def test_requires_agent_spawning(self):
+        from harmony.orchestrator.prompts.design import design_quality_audit
+        prompt = design_quality_audit("1", "Landing Page")
+        assert "Agent tool" in prompt
+        assert "auditor_id" in prompt
+
+    def test_design_checklist_has_sections(self):
+        from harmony.orchestrator.prompts.design import DESIGN_CHECKLIST
+        assert "Typography" in DESIGN_CHECKLIST
+        assert "Spacing" in DESIGN_CHECKLIST
+        assert "Anti-AI" in DESIGN_CHECKLIST
+        assert "hover" in DESIGN_CHECKLIST.lower()
+
+    def test_design_brief_requirements(self):
+        from harmony.orchestrator.prompts.design import design_brief_requirements
+        reqs = design_brief_requirements()
+        assert "Color" in reqs
+        assert "Typography" in reqs
+        assert "Spacing" in reqs
+        assert "Component" in reqs
+        assert "Motion" in reqs
+
+
+class TestVerifyPrompt:
+    def test_requires_auditor_id(self):
+        prompt = prompts.verify_prd_compliance()
+        assert "auditor_id" in prompt

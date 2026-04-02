@@ -7,6 +7,7 @@ after rate limits, crashes, or intentional pauses.
 from __future__ import annotations
 
 import json
+import os
 import uuid
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
@@ -25,7 +26,37 @@ DEFAULT_QUALITY_THRESHOLDS: dict = {
     "max_file_lines": 400,      # No single file exceeds this
     "max_function_lines": 60,   # No single function exceeds this
     "security_critical": 0,     # Zero critical security issues
+    "a11y_critical": 0,         # Zero critical accessibility issues
+    "design_token_violations": 10,  # Max hardcoded color/spacing values (frontend)
 }
+
+STAGE_THRESHOLDS: dict[str, dict] = {
+    "prototype": {
+        "test_coverage": 50.0,
+        "max_file_lines": 600,
+        "max_function_lines": 80,
+    },
+    "mvp": {
+        "test_coverage": 70.0,
+        "max_file_lines": 400,
+        "max_function_lines": 60,
+    },
+    "production": {
+        "test_coverage": 80.0,
+        "max_file_lines": 300,
+        "max_function_lines": 40,
+        "a11y_critical": 0,
+        "design_token_violations": 5,  # Strict for production
+    },
+}
+
+
+def thresholds_for_stage(stage: str) -> dict:
+    """Return quality thresholds adjusted for the given project stage."""
+    base = dict(DEFAULT_QUALITY_THRESHOLDS)
+    overrides = STAGE_THRESHOLDS.get(stage, {})
+    base.update(overrides)
+    return base
 
 
 @dataclass
@@ -44,6 +75,8 @@ class TaskState:
     checkpoint_step: str = ""  # Human-readable step name (e.g., "3/5 files written")
     quality_scores: dict = field(default_factory=dict)  # Deterministic metrics per gate run
     audit_round: int = 0  # Number of audit rounds completed
+    auditor_id: str = ""  # ID of the agent that performed the audit
+    audit_nonce: str = ""  # Server-generated nonce for audit verification
 
     def is_terminal(self) -> bool:
         """Return True if the task is in a terminal state (completed or exhausted retries)."""
@@ -52,7 +85,7 @@ class TaskState:
         )
 
     # Keys where lower is better (score must be <= threshold)
-    _UPPER_BOUND_KEYS = frozenset({"max_file_lines", "max_function_lines", "security_critical"})
+    _UPPER_BOUND_KEYS = frozenset({"max_file_lines", "max_function_lines", "security_critical", "a11y_critical", "design_token_violations"})
 
     def gate_passed(self, thresholds: dict) -> bool:
         """Check if quality_scores meet all thresholds."""
@@ -117,28 +150,51 @@ class SessionState:
     # ------------------------------------------------------------------ #
 
     def save(self, path: str = DEFAULT_STATE_PATH) -> Path:
-        """Serialize state to JSON on disk."""
+        """Serialize state to JSON on disk using atomic write."""
+        import tempfile
         self.updated_at = _now_iso()
         p = Path(path)
         p.parent.mkdir(parents=True, exist_ok=True)
         data = asdict(self)
-        p.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        content = json.dumps(data, indent=2, ensure_ascii=False)
+        # Atomic write: write to temp file, then rename
+        fd, tmp_path = tempfile.mkstemp(dir=str(p.parent), suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(content)
+            # Keep backup of previous state
+            if p.exists():
+                backup = p.with_suffix(".json.bak")
+                try:
+                    backup.write_text(p.read_text(encoding="utf-8"), encoding="utf-8")
+                except OSError:
+                    pass
+            os.replace(tmp_path, str(p))
+        except BaseException:
+            # Clean up temp file on any failure
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
         return p
 
     @classmethod
     def load(cls, path: str = DEFAULT_STATE_PATH) -> Optional["SessionState"]:
-        """Load state from JSON.  Returns None if the file does not exist or is corrupted."""
+        """Load state from JSON. Falls back to .bak if primary is corrupted."""
         p = Path(path)
-        if not p.exists():
-            return None
-        try:
-            data = json.loads(p.read_text(encoding="utf-8"))
-            tasks = [TaskState(**t) for t in data.pop("tasks", [])]
-            state = cls(**data)
-            state.tasks = tasks
-            return state
-        except (json.JSONDecodeError, TypeError, KeyError):
-            return None
+        for candidate in (p, p.with_suffix(".json.bak")):
+            if not candidate.exists():
+                continue
+            try:
+                data = json.loads(candidate.read_text(encoding="utf-8"))
+                tasks = [TaskState(**t) for t in data.pop("tasks", [])]
+                state = cls(**data)
+                state.tasks = tasks
+                return state
+            except (json.JSONDecodeError, TypeError, KeyError):
+                continue
+        return None
 
     # ------------------------------------------------------------------ #
     #  Factory

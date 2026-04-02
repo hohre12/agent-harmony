@@ -15,8 +15,9 @@ def verify_prd_compliance() -> str:
         "  3. Cite specific files as evidence\n"
         '  Be strict — partial implementations should be flagged."\n\n'
         "After the Agent returns, call harmony_pipeline_next with:\n"
-        '{"step":"verify_prd","gaps":[{"feature":"X","status":"partial","missing":"Y"}]}\n'
-        'If all implemented: {"step":"verify_prd","gaps":[]}'
+        '{"step":"verify_prd","auditor_id":"<agent-id>","gaps":[{"feature":"X","status":"partial","missing":"Y"}]}\n'
+        'If all implemented: {"step":"verify_prd","auditor_id":"<agent-id>","gaps":[]}\n\n'
+        "CRITICAL: auditor_id is REQUIRED. The pipeline will REJECT results without it."
     )
 
 

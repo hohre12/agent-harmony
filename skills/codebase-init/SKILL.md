@@ -88,7 +88,6 @@ Create the following structure using a **merge approach**:
 ```
 {project-root}/
 ├── .claude/
-│   ├── agent-memory/
 │   ├── agents/
 │   └── skills/
 └── docs/
@@ -271,7 +270,6 @@ Analysis Results:
 
 [Newly Added]
 - docs/architecture.md (reverse-engineered codebase document)
-- .claude/agent-memory/
 - .claude/agents/
 - .claude/agents/expert-agent.md  (copied from plugin)
 - .claude/skills/

@@ -1,0 +1,287 @@
+"""Server-side verification — core checks (build evidence, file/function sizes, PRD, tasks).
+
+Frontend-specific checks (design tokens, build-and-test detection, quality-score
+orchestration) live in ``verifier_frontend.py``.
+"""
+
+from __future__ import annotations
+
+import ast
+import re
+import subprocess
+from pathlib import Path
+
+
+def _safe_cwd(cwd: str) -> str:
+    """Validate cwd is a safe, existing directory."""
+    p = Path(cwd).resolve()
+    if not p.exists() or not p.is_dir():
+        raise ValueError(f"Invalid cwd: {cwd}")
+    return str(p)
+
+
+def run_cmd(cmd: list[str], cwd: str = ".", timeout: int = 30) -> tuple[int, str]:
+    """Run a command and return (returncode, stdout). Stderr merged into stdout."""
+    try:
+        r = subprocess.run(
+            cmd, capture_output=True, text=True, cwd=cwd, timeout=timeout,
+        )
+        return r.returncode, (r.stdout + r.stderr).strip()
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
+        return -1, str(e)
+
+
+def verify_build_evidence(cwd: str = ".") -> dict:
+    """Check git for evidence that code was actually written/changed."""
+    cwd = _safe_cwd(cwd)
+    code, out = run_cmd(["git", "diff", "--stat", "HEAD"], cwd=cwd)
+    if code != 0:
+        code, out = run_cmd(["git", "diff", "--stat"], cwd=cwd)
+    has_changes = bool(out.strip())
+    files_changed = 0
+    if has_changes:
+        for line in out.strip().split("\n"):
+            if "changed" in line:
+                parts = line.strip().split()
+                if parts and parts[0].isdigit():
+                    files_changed = int(parts[0])
+    if not has_changes:
+        # Also check recent commits (team-executor may have already committed)
+        code2, out2 = run_cmd(["git", "log", "--oneline", "--stat", "-1"], cwd=cwd)
+        if code2 == 0 and out2.strip():
+            # Check if the last commit was recent (within the session)
+            has_changes = "changed" in out2
+            if has_changes:
+                for line in out2.strip().split("\n"):
+                    if "changed" in line:
+                        parts = line.strip().split()
+                        if parts and parts[0].isdigit():
+                            files_changed = int(parts[0])
+    return {
+        "has_changes": has_changes,
+        "files_changed": files_changed,
+        "raw": out[:500],
+    }
+
+
+def verify_file_sizes(cwd: str = ".") -> dict:
+    """Find the largest source file by line count among recently changed files."""
+    cwd = _safe_cwd(cwd)
+    code, out = run_cmd(["git", "diff", "--name-only", "--diff-filter=ACMR", "HEAD~1"], cwd=cwd)
+    if code != 0 or not out.strip():
+        code, out = run_cmd(["git", "ls-files"], cwd=cwd)
+    if not out.strip():
+        return {"max_file_lines": 0, "largest_file": "", "verified": False}
+    source_exts = {".py", ".ts", ".tsx", ".js", ".jsx", ".vue", ".svelte", ".go", ".rs", ".java"}
+    max_lines = 0
+    largest_file = ""
+    for filepath in out.strip().split("\n"):
+        filepath = filepath.strip()
+        if not filepath:
+            continue
+        p = Path(cwd) / filepath
+        if p.suffix not in source_exts or not p.exists():
+            continue
+        try:
+            line_count = len(p.read_text(encoding="utf-8", errors="ignore").splitlines())
+            if line_count > max_lines:
+                max_lines = line_count
+                largest_file = filepath
+        except (OSError, UnicodeDecodeError):
+            continue
+    return {
+        "max_file_lines": max_lines,
+        "largest_file": largest_file,
+        "verified": True,
+    }
+
+
+def verify_prd_sections(prd_path: str = "docs/prd.md") -> dict:
+    """Check that a PRD file contains required sections."""
+    p = Path(prd_path)
+    if not p.exists():
+        return {"exists": False, "missing_sections": ["FILE_NOT_FOUND"], "valid": False}
+    content = p.read_text(encoding="utf-8", errors="ignore").lower()
+    required_sections = [
+        "overview",
+        "problem",
+        "target user",
+        "feature",
+        "technical",
+        "data model",
+        "api",
+    ]
+    missing = []
+    for section in required_sections:
+        # Match section keyword in a header line (# or ##) — allow plural/suffix
+        pattern = rf'(?:^|\n)#{{1,3}}\s+.*\b{re.escape(section)}'
+        if not re.search(pattern, content):
+            missing.append(section)
+    # Check minimum content per section
+    shallow_sections = []
+    lines = content.splitlines()
+    current_section = ""
+    section_content_lines = 0
+    for line in lines:
+        if line.strip().startswith("#"):
+            if current_section and section_content_lines < 3:
+                shallow_sections.append(current_section)
+            current_section = line.strip()
+            section_content_lines = 0
+        elif line.strip():
+            section_content_lines += 1
+    # Check last section
+    if current_section and section_content_lines < 3:
+        shallow_sections.append(current_section)
+    return {
+        "exists": True,
+        "missing_sections": missing,
+        "shallow_sections": shallow_sections,
+        "valid": len(missing) == 0,
+        "file_lines": len(content.splitlines()),
+    }
+
+
+def verify_task_structure(tasks: list[dict]) -> dict:
+    """Validate vertical-slice task structure."""
+    issues: list[str] = []
+    if not tasks:
+        return {"valid": False, "issues": ["No tasks provided"]}
+    horizontal_keywords = [
+        "set up database", "setup database", "create schema", "all api",
+        "build all", "create all ui", "all pages", "all endpoints",
+        "database layer", "api layer", "ui layer", "frontend layer",
+        "backend layer", "infrastructure setup",
+    ]
+    for task in tasks:
+        title = task.get("title", "").lower()
+        task_id = task.get("id", "?")
+        subtasks = task.get("subtasks", [])
+        # Only flag if the title starts with or is primarily a horizontal pattern
+        title_words = title.split("[")[0].strip()
+        for kw in horizontal_keywords:
+            if kw in title_words:
+                issues.append(f"Task {task_id}: horizontal-layer pattern detected: '{kw}'")
+                break
+        if not subtasks:
+            issues.append(f"Task {task_id}: no subtasks defined")
+        elif len(subtasks) < 2:
+            issues.append(f"Task {task_id}: only {len(subtasks)} subtask — too few for vertical slice")
+        if subtasks:
+            agents: set[str] = set()
+            for st in subtasks:
+                st_title = st.get("title", "")
+                if "(" in st_title and ")" in st_title:
+                    agent = st_title.split("(")[-1].rstrip(")")
+                    agents.add(agent.strip())
+            if len(agents) <= 1 and len(subtasks) > 1:
+                issues.append(f"Task {task_id}: all subtasks assigned to same agent — not a vertical slice")
+        for st in subtasks:
+            st_id = st.get("id", "?")
+            if not st.get("description"):
+                issues.append(f"Subtask {st_id}: missing description field")
+            if not st.get("test"):
+                issues.append(f"Subtask {st_id}: missing test acceptance criteria")
+    return {
+        "valid": len(issues) == 0,
+        "issues": issues,
+        "task_count": len(tasks),
+    }
+
+
+def _measure_python_functions(filepath: str, source: str) -> tuple[int, str]:
+    """Measure largest function in Python file via AST. Returns (max_lines, func_name)."""
+    max_lines = 0
+    largest = ""
+    try:
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                func_lines = node.end_lineno - node.lineno + 1
+                if func_lines > max_lines:
+                    max_lines = func_lines
+                    largest = node.name
+    except SyntaxError:
+        pass
+    return max_lines, largest
+
+
+def _measure_js_functions(source: str) -> tuple[int, str]:
+    """Measure largest function in JS/TS file via brace counting. Returns (max_lines, func_name)."""
+    lines = source.splitlines()
+    max_lines = 0
+    largest = ""
+    in_func = False
+    brace_depth = 0
+    func_start = 0
+    func_name = ""
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not in_func and ("function " in stripped or "=>" in stripped or stripped.startswith("async ")):
+            if "{" in stripped:
+                in_func = True
+                brace_depth = stripped.count("{") - stripped.count("}")
+                func_start = i
+                for token in stripped.split():
+                    if token not in ("function", "async", "export", "default", "const", "let", "var"):
+                        func_name = token.split("(")[0].split("=")[0].strip()
+                        break
+        elif in_func:
+            brace_depth += stripped.count("{") - stripped.count("}")
+            if brace_depth <= 0:
+                func_len = i - func_start + 1
+                if func_len > max_lines:
+                    max_lines = func_len
+                    largest = func_name
+                in_func = False
+    return max_lines, largest
+
+
+def verify_function_sizes(cwd: str = ".") -> dict:
+    """Measure the largest function by line count using Python AST for .py files, regex for others."""
+    cwd = _safe_cwd(cwd)
+    code, out = run_cmd(["git", "diff", "--name-only", "--diff-filter=ACMR", "HEAD~1"], cwd=cwd)
+    if code != 0 or not out.strip():
+        code, out = run_cmd(["git", "ls-files"], cwd=cwd)
+    if not out.strip():
+        return {"max_function_lines": 0, "largest_function": "", "file": "", "verified": False}
+    max_lines = 0
+    largest_func = ""
+    largest_file = ""
+    for filepath in out.strip().split("\n"):
+        filepath = filepath.strip()
+        if not filepath:
+            continue
+        p = Path(cwd) / filepath
+        if not p.exists():
+            continue
+        try:
+            source = p.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        if p.suffix == ".py":
+            func_lines, func_name = _measure_python_functions(filepath, source)
+        elif p.suffix in (".ts", ".tsx", ".js", ".jsx"):
+            func_lines, func_name = _measure_js_functions(source)
+        else:
+            continue
+        if func_lines > max_lines:
+            max_lines = func_lines
+            largest_func = func_name
+            largest_file = filepath
+    return {
+        "max_function_lines": max_lines,
+        "largest_function": largest_func,
+        "file": largest_file,
+        "verified": True,
+    }
+
+
+def verify_files_exist(paths: list[str], cwd: str = ".") -> dict:
+    """Check that expected output files exist."""
+    missing = []
+    for p in paths:
+        full = Path(cwd) / p
+        if not full.exists():
+            missing.append(p)
+    return {"all_exist": len(missing) == 0, "missing": missing}

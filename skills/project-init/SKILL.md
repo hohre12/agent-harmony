@@ -40,7 +40,6 @@ Create the following structure using a **merge approach**:
 ```
 {project-root}/
 ├── .claude/
-│   ├── agent-memory/
 │   ├── agents/
 │   └── skills/
 └── docs/
@@ -227,7 +226,6 @@ After all steps are complete, report to the user in the following format:
 ✅ Project initialization complete: {project name}
 
 [Newly Added]
-- .claude/agent-memory/
 - .claude/agents/
 - .claude/agents/expert-agent.md  (copied from plugin)
 - .claude/skills/

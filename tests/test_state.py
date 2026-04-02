@@ -219,3 +219,86 @@ class TestInterviewSequence:
         assert "features" in seq
         assert "tech_stack" in seq
         assert "project_stage" in seq
+
+
+class TestGatePassedEdgeCases:
+    def test_a11y_critical_in_upper_bound(self):
+        """Verify a11y_critical is treated as upper-bound (lower is better)."""
+        task = TaskState(id="1", title="test")
+        task.quality_scores = {"a11y_critical": 2}
+        thresholds = {"a11y_critical": 0}
+        assert not task.gate_passed(thresholds)
+
+    def test_a11y_critical_zero_passes(self):
+        task = TaskState(id="1", title="test")
+        task.quality_scores = {"a11y_critical": 0}
+        thresholds = {"a11y_critical": 0}
+        assert task.gate_passed(thresholds)
+
+
+class TestDesignTokenThreshold:
+    def test_design_token_in_defaults(self):
+        """Verify design_token_violations is in default thresholds."""
+        from harmony.orchestrator.state import DEFAULT_QUALITY_THRESHOLDS
+        assert "design_token_violations" in DEFAULT_QUALITY_THRESHOLDS
+
+    def test_design_token_in_upper_bound(self):
+        """Verify design_token_violations is treated as upper-bound."""
+        task = TaskState(id="1", title="test")
+        task.quality_scores = {"design_token_violations": 15}
+        thresholds = {"design_token_violations": 10}
+        assert not task.gate_passed(thresholds)
+
+    def test_design_token_passes_under_threshold(self):
+        task = TaskState(id="1", title="test")
+        task.quality_scores = {"design_token_violations": 5}
+        thresholds = {"design_token_violations": 10}
+        assert task.gate_passed(thresholds)
+
+
+class TestAtomicSave:
+    def test_save_creates_backup(self, tmp_path):
+        """Verify that save creates a .bak backup file."""
+        path = str(tmp_path / "state.json")
+        state = SessionState(session_id="first", pipeline_phase="init")
+        state.save(path)
+        # Save again — should create backup
+        state.session_id = "second"
+        state.save(path)
+        backup = tmp_path / "state.json.bak"
+        assert backup.exists()
+        bak_data = json.loads(backup.read_text())
+        assert bak_data["session_id"] == "first"
+
+
+class TestAuditNonceFieldState:
+    def test_audit_nonce_persists(self, tmp_path):
+        """Verify audit_nonce field survives save/load cycle."""
+        from harmony.orchestrator.state import SessionState, TaskState
+        path = str(tmp_path / "state.json")
+        state = SessionState(
+            session_id="test",
+            tasks=[TaskState(id="1", title="Test", audit_nonce="abc123")],
+        )
+        state.save(path)
+        loaded = SessionState.load(path)
+        assert loaded.tasks[0].audit_nonce == "abc123"
+
+
+class TestPrdSectionDepth:
+    def test_shallow_sections_detected(self, tmp_path):
+        """Shallow PRD sections (< 3 content lines) are detected."""
+        from harmony.orchestrator.verifier import verify_prd_sections
+        prd = tmp_path / "prd.md"
+        prd.write_text(
+            "# Project\n## Overview\nOne line only.\n"
+            "## Problem Statement\nAnother single line.\n"
+            "## Target Users\nDevelopers\n"
+            "## Core Features\nLogin\nDashboard\nSettings\nAPI\n"
+            "## Technical Architecture\nReact + Node\nPostgreSQL\nDocker\n"
+            "## Data Model\nUser table\nSession table\nProduct table\n"
+            "## API Design\nGET /users\nPOST /auth\nGET /products\n"
+        )
+        result = verify_prd_sections(str(prd))
+        assert result["exists"]
+        assert len(result.get("shallow_sections", [])) > 0

@@ -30,7 +30,8 @@ def harden_security_review() -> str:
         "  - Resource leaks (unclosed connections, file handles)\n\n"
         '  For each issue: {file, line, severity (critical/warning), description, fix}"\n\n'
         "After the Agent returns, call harmony_pipeline_next with:\n"
-        '{"step":"harden_security","critical_count":N,"criticals":[...]}'
+        '{"step":"harden_security","auditor_id":"<agent-id>","critical_count":N,"criticals":[...]}\n\n'
+        "CRITICAL: auditor_id is REQUIRED. The pipeline will REJECT results without it."
     )
 
 

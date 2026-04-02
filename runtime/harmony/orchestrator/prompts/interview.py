@@ -244,3 +244,87 @@ def prd_review() -> str:
         "Do NOT proceed until user chooses a).\n"
         "Interpret their answer and call harmony_pipeline_respond with the letter (a/b/c/d)."
     )
+
+
+# ====================================================================== #
+#  Choice resolution (moved from pipeline.py for separation of concerns)
+# ====================================================================== #
+
+# Choice letter → human-readable mapping per question
+CHOICE_MAP: dict[str, dict[str, str]] = {
+    "target_users": {
+        "a": "Developers / technical users",
+        "b": "General consumers (non-technical)",
+        "c": "Internal team / company employees",
+        "d": "Enterprise clients (B2B)",
+        "e": "Myself only (personal tool)",
+    },
+    "core_problem": {
+        "a": "Manual repetitive work that should be automated",
+        "b": "Existing tools are too expensive",
+        "c": "Existing tools are too complex / bad UX",
+        "d": "No good solution exists yet",
+        "e": "Internal process that needs systematizing",
+    },
+    "tech_stack": {
+        "a": "Next.js + TypeScript + Prisma + PostgreSQL",
+        "b": "React + TypeScript + Node.js + Express",
+        "c": "Python + FastAPI + PostgreSQL",
+        "d": "React Native + Expo + TypeScript",
+        "e": "Python + Click/Typer (CLI)",
+    },
+    "project_stage": {
+        "a": "Prototype",
+        "b": "MVP",
+        "c": "Production",
+    },
+    "design": {
+        "a": "Clean & minimal (shadcn/ui)",
+        "b": "Bold & creative (custom design)",
+        "c": "Match a reference",
+        "d": "Functional only (handle design separately)",
+    },
+    "auth": {
+        "a": "Email + password",
+        "b": "Social login only (Google, GitHub)",
+        "c": "Email + social login (both)",
+        "d": "Magic link (passwordless)",
+        "e": "No authentication needed",
+    },
+    "monetization": {
+        "a": "Free forever (open source / personal)",
+        "b": "Freemium (free + paid)",
+        "c": "Subscription only",
+        "d": "One-time purchase",
+        "e": "Not decided yet",
+    },
+    "deployment": {
+        "a": "Vercel",
+        "b": "AWS",
+        "c": "Railway / Render",
+        "d": "Self-hosted / Docker",
+        "e": "Local only",
+    },
+}
+
+
+def resolve_answer(question_id: str, raw_answer: str) -> str:
+    """Convert short letter answers to full text. Handles multi-select (e.g., 'a, b, c')."""
+    choices = CHOICE_MAP.get(question_id, {})
+    if not choices:
+        return raw_answer
+
+    # Check for multi-select (comma-separated letters)
+    parts = [p.strip().lower().rstrip(")") for p in raw_answer.split(",")]
+    if len(parts) > 1:
+        resolved_parts = []
+        for part in parts:
+            letter = part[0] if part and part[0] in "abcdef" else ""
+            resolved_parts.append(choices.get(letter, part))
+        return ", ".join(resolved_parts)
+
+    # Single answer
+    letter = raw_answer.strip().lower().rstrip(")")
+    if letter and letter[0] in "abcdef":
+        letter = letter[0]
+    return choices.get(letter, raw_answer)

@@ -66,6 +66,33 @@ harmony_memory_save({
 - **Testing/QA**: ALWAYS required when the project has 2 or more services or sub-projects — cross-service integration test strategy and per-service test coverage cannot be delegated to implementation agents
 - **Design/UI**: ALWAYS required when the PRD contains a dedicated UI/UX section — covers both UX (user flows, screen transitions, interaction patterns, onboarding/error/edge-case UX, accessibility requirements) and UI (design tokens, color system, typography, component specs, animation specs). These cannot be absorbed into the frontend implementation agent.
 
+### Design-Agent Quality Standards
+
+The design-agent MUST enforce these non-negotiable principles:
+
+**Anti-AI Aesthetic**: The #1 goal is that no one should be able to tell AI generated the design. This means:
+- NO repetitive 3-column card grids as the default layout
+- Section layouts MUST vary (grid, offset, overlap, full-width, constrained)
+- Each section has a visually distinct treatment (different background, layout, or visual weight)
+- Typography follows strict hierarchy with intentional sizing
+- Color usage is restrained and systematic (design tokens ONLY)
+
+**Reference Document**: The design-agent MUST create `docs/refs/design-brief.md` containing:
+- Complete color system with CSS custom properties
+- Typography scale with font families, sizes, weights, line-heights
+- Spacing scale (4px base unit)
+- Component patterns (buttons, cards, inputs with all states)
+- Motion specifications (transition timing, easing curves)
+- Anti-AI aesthetic rules
+
+**Quality Bar**: Every page MUST have:
+- Line-height ≥ 1.4 on body text
+- Heading hierarchy (h1 > h2 > h3, never random sizes)
+- ≥ 3 visually distinct section treatments
+- Hover states on ALL interactive elements
+- Responsive design tested at 320/768/1024/1440px widths
+- Loading, empty, and error states for all data-dependent views
+
 **Naming:** `{domain}-agent.md` (e.g., `backend-agent.md`, `db-agent.md`)
 
 **Tool assignment:**

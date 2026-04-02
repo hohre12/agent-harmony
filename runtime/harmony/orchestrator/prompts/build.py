@@ -3,10 +3,19 @@
 from __future__ import annotations
 
 
-def build_task(task_id: str, task_title: str, tag: str = "") -> str:
+def build_task(task_id: str, task_title: str, tag: str = "", checkpoint_step: str = "", checkpoint: str = "", progress: str = "") -> str:
     tag_display = tag or "v1"
+    resume_hint = ""
+    if checkpoint_step:
+        resume_hint = (
+            f"\n**RESUME FROM CHECKPOINT**: This task was previously interrupted at: {checkpoint_step}\n"
+            f"Previous progress: {checkpoint}\n"
+            "Continue from where it left off — do NOT restart from scratch.\n\n"
+        )
+    progress_line = f"**[{progress}]** " if progress else ""
     return (
-        f"Execute task {task_id}: \"{task_title}\"\n\n"
+        f"{progress_line}Execute task {task_id}: \"{task_title}\"\n\n"
+        f"{resume_hint}"
         f"Run: /team-executor {tag_display}:{task_id}\n\n"
         "After team-executor completes, call harmony_pipeline_next with:\n"
         f'{{"step":"build_task","task_id":"{task_id}","task_title":"{task_title}","success":true}}\n\n'

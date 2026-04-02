@@ -14,6 +14,7 @@ from harmony.orchestrator.prompts.interview import (
     interview_question,
     generate_prd,
     prd_review,
+    resolve_answer,
 )
 from harmony.orchestrator.prompts.setup import (
     setup_step,
@@ -40,13 +41,19 @@ from harmony.orchestrator.prompts.delivery import (
     delivery_summary,
     resume_prompt,
 )
+from harmony.orchestrator.prompts.design import (
+    design_quality_audit,
+    design_brief_requirements,
+    DESIGN_CHECKLIST,
+)
 
 __all__ = [
-    "interview_start", "interview_question", "generate_prd", "prd_review",
+    "interview_start", "interview_question", "generate_prd", "prd_review", "resolve_answer",
     "setup_step", "generate_tasks", "setup_team_executor",
     "build_task", "fix_issues", "escalation",
     "quality_gate", "production_audit",
     "harden_security_review", "harden_fix_criticals",
     "verify_prd_compliance", "verify_fix_gaps",
     "final_check", "delivery_summary", "resume_prompt",
+    "design_quality_audit", "design_brief_requirements", "DESIGN_CHECKLIST",
 ]

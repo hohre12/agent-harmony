@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from harmony.memory.store import AgentMemory, MemoryEntry, global_context
+from harmony.memory.store import AgentMemory, MemoryEntry, global_context, MEMORY_DIR
 
 
 class TestAddAndDedup:
@@ -97,11 +97,13 @@ class TestForget:
 
 
 class TestPersistence:
-    def test_save_load(self, tmp_path: Path):
+    def test_save_load(self, tmp_path: Path, monkeypatch):
+        import harmony.memory.store as store_mod
+        monkeypatch.setattr(store_mod, "MEMORY_DIR", str(tmp_path))
         mem = AgentMemory(agent_role="backend-agent")
         mem.add("pattern", "Use ORM", project="test")
         mem.add("mistake", "Forgot indexes")
-        mem.save(str(tmp_path))
+        mem.save()
 
         loaded = AgentMemory.load("backend-agent", str(tmp_path))
         assert len(loaded.entries) == 2
