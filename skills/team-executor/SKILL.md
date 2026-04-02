@@ -109,12 +109,17 @@ git worktree add .worktrees/wt-{subtask-id} -b feature/{tag}-{task-id}_{task-nam
   agent performs a production audit from scratch.
 
   Before reporting done, verify ALL of the following:
-  1. Requirements check: every design doc item implemented
-  2. Error handling: all user-facing paths handle failures gracefully
-  3. Edge cases: empty lists, zero values, boundary conditions, null inputs
-  4. Code quality: no dead code, consistent naming, no god functions
-  5. Tests: every public function has at least one test with meaningful assertions
-  6. Every error path must be handled. Every edge case must be considered.
+  1. Requirements: every design doc item implemented
+  2. Bugs: no logic errors, off-by-one, null access, race conditions
+  3. Error handling: all user-facing paths handle failures gracefully
+  4. Edge cases: empty lists, zero values, boundary conditions, null inputs
+  5. Constants: no magic numbers/strings — use named constants
+  6. DRY: no duplicated logic — extract shared functions/components
+  7. Common components: repeated UI patterns extracted to shared components
+  8. Naming: clear, consistent, meaningful variable/function/class names
+  9. No dead code, no god functions (>60 lines), no god files (>400 lines)
+  10. Tests: every public function tested with meaningful assertions
+  11. Performance: no N+1 queries, no unbounded fetches, proper memoization
 
   Ask yourself: if this code were submitted by a stranger with no explanation,
   would it pass a senior engineer's review? If not, fix it before reporting done.
@@ -128,11 +133,35 @@ git worktree add .worktrees/wt-{subtask-id} -b feature/{tag}-{task-id}_{task-nam
 
 #### 6-1. Code Review with Quality Criteria
 The `review_agent` (from team_config) reviews ALL implementations against:
-1. **Design Compliance**: Every design doc item implemented
-2. **Error Handling**: try/catch, empty states, validation
-3. **Security**: Input validation, auth checks, no secrets
-4. **Integration**: API contracts match, imports resolve
-5. **Test Coverage**: Every public function tested
+
+**Bugs & Logic:**
+1. Logic errors: wrong conditionals, off-by-one, inverted boolean, missing return
+2. Null/undefined access: unguarded optional values, missing null checks
+3. Race conditions: shared state without sync, async ordering issues
+4. Boundary conditions: empty arrays, zero/negative values, max int
+
+**Code Quality:**
+5. DRY violations: duplicated logic → extract to shared functions/utilities
+6. Magic numbers/strings: hardcoded values → named constants
+7. Common components: repeated UI/logic patterns → shared components
+8. Naming: unclear, inconsistent, or misleading names
+9. Dead code: unused imports, unreachable branches, commented-out code
+10. File/function size: no god files (>400 lines) or god functions (>60 lines)
+
+**Architecture & Integration:**
+11. Design compliance: every design doc item implemented
+12. Error handling: try/catch, empty states, validation — all paths covered
+13. Security: input validation, auth checks, no secrets
+14. Integration: API contracts match, imports resolve, types align
+
+**Performance:**
+15. N+1 queries: DB calls inside loops
+16. Missing memoization / unnecessary re-renders (frontend)
+17. Unbounded data fetches: missing pagination or limits
+
+**Test Quality:**
+18. Every public function tested with meaningful assertions
+19. Edge cases and error paths tested, not just happy paths
 
 For each issue: File:line, Severity (MUST-FIX/SHOULD-FIX), What, How to fix.
 

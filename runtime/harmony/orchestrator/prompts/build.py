@@ -117,6 +117,13 @@ def _accountability_block(thresholds: dict | None = None) -> str:
         "If verification or audit fails, you will be sent back to fix the issues.\n"
         "There is NO round limit and NO auto-pass — the loop continues until\n"
         "every threshold is met and the auditor is satisfied.\n\n"
+        "The auditor will specifically check for:\n"
+        "  - Logic bugs (wrong conditions, off-by-one, null access, race conditions)\n"
+        "  - Magic numbers/strings (must be named constants)\n"
+        "  - Duplicated code (must extract shared functions/components)\n"
+        "  - Unclear naming, dead code, god files/functions\n"
+        "  - N+1 queries, unbounded fetches, missing memoization\n"
+        "  - Tests with meaningful assertions covering edge cases and error paths\n\n"
         "Write code as if a stranger will judge it with no benefit of the doubt.\n"
         "---"
     )
