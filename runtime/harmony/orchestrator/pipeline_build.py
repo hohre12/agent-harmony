@@ -19,6 +19,18 @@ from harmony.orchestrator.utils import make_response
 _PROJECT_CWD = "."
 
 
+def _safe_get_task(state: SessionState, task_id: str, step_name: str = "build_task"):
+    """Safely get a task by ID. Returns (task, None) or (None, error_response)."""
+    try:
+        return state._task_by_id(task_id), None
+    except ValueError:
+        return None, make_response(
+            step=step_name,
+            prompt=f"Error: task '{task_id}' not found. Check task_id and retry.",
+            expect="step_result",
+        )
+
+
 # ---- Phase: build ------------------------------------------------------ #
 
 def _handle_build(state: SessionState, data: dict, is_user_input: bool = False) -> dict:
@@ -33,10 +45,11 @@ def _handle_build(state: SessionState, data: dict, is_user_input: bool = False) 
         if answer in ("b", "manual"):
             # User wants to fix manually — mark current task as completed and move on
             task_id = data.get("task_id", "") or state.pipeline_step.split("_")[-1]
-            task = state._task_by_id(task_id)
-            if task:
-                task.status = "completed"
-                task.completed_at = _now_iso()
+            task, err = _safe_get_task(state, task_id, step_name="escalate")
+            if err:
+                return _next_build_task(state)
+            task.status = "completed"
+            task.completed_at = _now_iso()
             return _next_build_task(state)
         # a (keep trying) — continue fix loop; will pick up the in_progress task
         return _next_build_task(state)
@@ -90,7 +103,9 @@ def _handle_quality_gate(state: SessionState, data: dict) -> dict:
     task_id = data.get("task_id", "")
     task_title = data.get("task_title", "")
     scores = data.get("scores", {})
-    task = state._task_by_id(task_id)
+    task, err = _safe_get_task(state, task_id, step_name="quality_gate")
+    if err:
+        return err
     task.quality_scores = scores
 
     # Server-side cross-verification of reported scores
@@ -149,7 +164,9 @@ def _handle_audit(state: SessionState, data: dict) -> dict:
     """Handle audit step result."""
     task_id = data.get("task_id", "")
     task_title = data.get("task_title", "")
-    task = state._task_by_id(task_id)
+    task, err = _safe_get_task(state, task_id, step_name="audit")
+    if err:
+        return err
 
     # Verify audit nonce
     expected_nonce = task.audit_nonce
@@ -228,7 +245,9 @@ def _handle_design_audit(state: SessionState, data: dict) -> dict:
     """Handle design quality audit result."""
     task_id = data.get("task_id", "")
     task_title = data.get("task_title", "")
-    task = state._task_by_id(task_id)
+    task, err = _safe_get_task(state, task_id, step_name="design_audit")
+    if err:
+        return err
 
     # Require auditor_id
     auditor_id = data.get("auditor_id", "")
@@ -269,13 +288,8 @@ def _handle_fix(state: SessionState, data: dict) -> dict:
             expect="step_result",
             metadata={"task_id": task_id, "task_title": task_title},
         )
-    # Fix failed — retry fix, no escalation
-    return make_response(
-        step="fix",
-        prompt=prompts.fix_issues(task_id, data.get("issues", [])),
-        expect="step_result",
-        metadata={"task_id": task_id, "task_title": task_title},
-    )
+    # Fix failed — route through fix_or_escalate so retry counter increments
+    return _build_fix_or_escalate(state, task_id, task_title, data.get("issues", []))
 
 
 def _build_fix_or_escalate(
@@ -287,7 +301,9 @@ def _build_fix_or_escalate(
     Quality is non-negotiable — there is no skip/accept option.
     User can only: keep trying, fix manually, or abort.
     """
-    task = state._task_by_id(task_id)
+    task, err = _safe_get_task(state, task_id, step_name="fix")
+    if err:
+        return err
     task.retry_count += 1
     if task.retry_count >= 5 and task.retry_count % 5 == 0:
         # Escalate to user — no skip/auto-pass option
@@ -359,6 +375,7 @@ def _next_build_task(state: SessionState) -> dict:
                         progress=progress,
                         subtasks=subtask_dicts,
                         team_config=tcfg,
+                        thresholds=state.quality_thresholds,
                     ),
                     expect="step_result",
                     metadata={"task_id": t.id, "task_title": t.title},
@@ -377,7 +394,7 @@ def _next_build_task(state: SessionState) -> dict:
         subtask_dicts = [asdict(st) for st in task.subtasks] if task.subtasks else None
         return make_response(
             step="build_task",
-            prompt=prompts.build_task(task.id, task.title, tag=tag, progress=progress, subtasks=subtask_dicts, team_config=tcfg),
+            prompt=prompts.build_task(task.id, task.title, tag=tag, progress=progress, subtasks=subtask_dicts, team_config=tcfg, thresholds=state.quality_thresholds),
             expect="step_result",
             metadata={"task_id": task.id, "task_title": task.title},
         )

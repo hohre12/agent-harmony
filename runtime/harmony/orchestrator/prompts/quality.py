@@ -33,6 +33,9 @@ def quality_gate(task_id: str, task_title: str, thresholds: dict) -> str:
         "IMPORTANT: Report EXACT numbers for ALL metrics. If a metric cannot be measured\n"
         "(e.g., no frontend = no a11y check), report the metric as 0 or true as appropriate.\n"
         "Do NOT omit any metric — omitted metrics cause automatic gate failure.\n\n"
+        "ACCOUNTABILITY: Your measurements will be cross-verified server-side.\n"
+        "If your reported scores do not match actual measurements, the gate fails\n"
+        "and you will be asked to re-measure. Report only what you can verify.\n\n"
         f"Thresholds (ALL must be met): {threshold_text}\n\n"
         "Call harmony_pipeline_next with:\n"
         f'{{"step":"quality_gate","task_id":"{task_id}","task_title":"{task_title}","scores":{{\n'
@@ -53,6 +56,13 @@ def production_audit(task_id: str, task_title: str) -> str:
         "Call Agent with this prompt (copy exactly):\n\n"
         '  "You are a senior engineer performing a production audit.\n'
         "  You have NO context about how this code was built. You are an independent reviewer.\n"
+        "  You see ONLY the code output — not the process, reasoning, or intentions.\n\n"
+        "  YOUR AUDIT STANDARDS:\n"
+        "  - Be RUTHLESS. Give NO benefit of the doubt.\n"
+        "  - If something MIGHT be wrong, flag it as MUST-FIX — not SHOULD-FIX.\n"
+        "  - You are accountable for your judgment: if you pass code that later\n"
+        "    breaks in production, it reflects on YOU. Err on the side of rejection.\n"
+        "  - Treat every file as if written by an untrusted stranger.\n\n"
         f'  Task: {task_title}\n'
         "  1. Find the task branch base: git merge-base HEAD main (or develop/master)\n"
         "     Then run: git diff --name-only <merge-base>...HEAD to find ALL changed files\n"
@@ -75,7 +85,8 @@ def production_audit(task_id: str, task_title: str) -> str:
         "       * Design token usage: colors/spacing from tokens, not hardcoded values\n"
         "       * Accessibility: semantic HTML, aria attributes, keyboard navigation\n"
         '  4. For each issue: file:line, severity (MUST-FIX/SHOULD-FIX), what, how to fix\n'
-        '  5. Default to NEEDS_FIX. Only verdict PASS if genuinely no issues found."\n\n'
+        '  5. Default to NEEDS_FIX. Only verdict PASS if genuinely no issues found.\n'
+        '  6. Remember: passing bad code is worse than flagging a false positive."\n\n'
         "After the Agent returns, call harmony_pipeline_next with:\n"
         f'{{"step":"audit","task_id":"{task_id}","auditor_id":"<agent-id-from-Agent-tool>","verdict":"PASS"/"NEEDS_FIX","issues":[...]}}\n\n'
         "CRITICAL: auditor_id is REQUIRED. The pipeline will REJECT audit results without it.\n"

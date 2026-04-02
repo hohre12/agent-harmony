@@ -102,12 +102,22 @@ git worktree add .worktrees/wt-{subtask-id} -b feature/{tag}-{task-id}_{task-nam
 - Each agent receives: task info, subtasks, design doc, worktree path
 - **Self-Review Requirement** for every implementation agent:
 
-  After completing implementation, perform a self-review before reporting done:
+  **WARNING: After implementation, your work enters a BLIND REVIEW.**
+  A different agent — with ZERO context about your process, reasoning, or
+  conversations — will review ONLY your code output. That reviewer judges
+  the code as if a stranger wrote it. After that, a fresh senior-engineer
+  agent performs a production audit from scratch.
+
+  Before reporting done, verify ALL of the following:
   1. Requirements check: every design doc item implemented
-  2. Error handling: all user-facing paths handle failures
-  3. Edge cases: boundary conditions handled
-  4. Code quality: no dead code, consistent naming
-  5. Tests: every public function has at least one test
+  2. Error handling: all user-facing paths handle failures gracefully
+  3. Edge cases: empty lists, zero values, boundary conditions, null inputs
+  4. Code quality: no dead code, consistent naming, no god functions
+  5. Tests: every public function has at least one test with meaningful assertions
+  6. Every error path must be handled. Every edge case must be considered.
+
+  Ask yourself: if this code were submitted by a stranger with no explanation,
+  would it pass a senior engineer's review? If not, fix it before reporting done.
 
 ### 5. Progress Monitoring
 - Receive progress reports from agents

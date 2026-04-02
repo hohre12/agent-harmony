@@ -40,21 +40,27 @@ _SETTINGS_LOCAL = {
 }
 
 
-def ensure_settings_local() -> None:
+def ensure_settings_local() -> str:
     """Ensure .claude/settings.local.json exists with required permissions.
 
     Merges into existing file if present (preserves user additions).
     Creates .claude/ directory if missing.
+
+    Returns a status string describing what was configured (e.g.
+    ``"done:bypassPermissions"`` when bypass mode was set or kept).
     """
     path = Path(".claude/settings.local.json")
     path.parent.mkdir(parents=True, exist_ok=True)
 
     existing: dict = {}
+    created_new = not path.exists()
     if path.exists():
         try:
             existing = json.loads(path.read_text())
         except (json.JSONDecodeError, OSError):
             existing = {}
+
+    previous_mode = existing.get("permissions", {}).get("defaultMode", "")
 
     # Merge: ensure our keys are present without removing user additions
     merged = {**existing}
@@ -75,6 +81,11 @@ def ensure_settings_local() -> None:
     merged["teammateMode"] = "auto"
 
     path.write_text(json.dumps(merged, indent=2, ensure_ascii=False) + "\n")
+
+    # Report what happened so the caller can surface it
+    if created_new or previous_mode != "bypassPermissions":
+        return "done:bypassPermissions"
+    return "done"
 
 
 _SETUP_SEQUENCE = [
@@ -214,10 +225,10 @@ def _next_setup_step(state: SessionState) -> dict:
     from harmony.orchestrator.pipeline_build import _next_build_task
 
     # Ensure settings.local.json exists — only once per session
-    if state.setup_progress.get("_settings_ensured") != "done":
+    if not state.setup_progress.get("_settings_ensured", "").startswith("done"):
         try:
-            ensure_settings_local()
-            state.setup_progress["_settings_ensured"] = "done"
+            status = ensure_settings_local()
+            state.setup_progress["_settings_ensured"] = status
         except OSError:
             pass  # Non-fatal — target dir may not be writable in tests
 
@@ -263,9 +274,19 @@ def _next_setup_step(state: SessionState) -> dict:
 
             if step_name == "project_init" and state.interview_context.get("has_existing_code"):
                 actual_step = "codebase_init"
+
+            prompt_text = prompts.setup_step(actual_step)
+            # Inform user when bypassPermissions was auto-configured
+            if step_name == "project_init" and state.setup_progress.get("_settings_ensured") == "done:bypassPermissions":
+                prompt_text += (
+                    "\n\nNote: .claude/settings.local.json has been configured with "
+                    "defaultMode=bypassPermissions so agents can run without manual "
+                    "permission prompts. You can change this in .claude/settings.local.json."
+                )
+
             return make_response(
                 step=actual_step,
-                prompt=prompts.setup_step(actual_step),
+                prompt=prompt_text,
                 expect="step_result",
             )
 
