@@ -21,12 +21,11 @@ class TestProtocol:
     def test_tools_list(self):
         resp = handle_message({"jsonrpc": "2.0", "method": "tools/list", "id": 2})
         tools = resp["result"]["tools"]
-        assert len(tools) == 7
+        assert len(tools) == 6
         names = {t["name"] for t in tools}
         assert "harmony_pipeline_start" in names
         assert "harmony_pipeline_next" in names
         assert "harmony_pipeline_respond" in names
-        assert "harmony_generate_template" in names
         assert "harmony_memory_save" in names
         assert "harmony_memory_load" in names
         assert "harmony_checkpoint_save" in names
@@ -118,21 +117,6 @@ class TestToolCalls:
         })
         data = json.loads(result)
         assert "interview" in data["step"]
-
-    def test_generate_template(self):
-        config = json.dumps({
-            "project_name": "Test",
-            "main_architect": "arch-agent",
-            "code_architect": "arch-agent",
-            "review_agent": "review-agent",
-            "agent_type_table": [],
-            "git_mode": "monorepo",
-        })
-        result = handle_tool_call("harmony_generate_template", {
-            "template_name": "team-executor",
-            "config_json": config,
-        })
-        assert "name: team-executor" in result
 
     def test_checkpoint_save(self, tmp_path: Path, monkeypatch):
         from harmony.orchestrator.state import SessionState, TaskState

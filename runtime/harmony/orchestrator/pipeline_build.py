@@ -24,17 +24,6 @@ _PROJECT_CWD = "."
 def _handle_build(state: SessionState, data: dict, is_user_input: bool = False) -> dict:
     step = data.get("step", "")
 
-    # --- Escalation response (user chose action) ---
-    if is_user_input and (step.startswith("escalate") or state.pipeline_step.startswith("escalate")):
-        answer = data.get("user_input", "").strip().lower()
-        if answer in ("b", "skip"):
-            return _next_build_task(state)
-        if answer in ("d", "abort"):
-            state.pipeline_phase = "done"
-            return make_response(step="done", prompt="Pipeline aborted by user.", expect="none")
-        # a (manual fix) or c (different approach) — continue build
-        return _next_build_task(state)
-
     dispatch = {
         "build_task": _handle_build_task,
         "quality_gate": _handle_quality_gate,

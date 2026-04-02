@@ -60,19 +60,6 @@ TOOLS = [
             "required": ["user_input"],
         },
     },
-    # --- Template ---
-    {
-        "name": "harmony_generate_template",
-        "description": "Generate a SKILL.md file from configuration. Returns the complete file content to write to disk.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "template_name": {"type": "string", "enum": ["team-executor"]},
-                "config_json": {"type": "string", "description": "JSON config for template generation"},
-            },
-            "required": ["template_name", "config_json"],
-        },
-    },
     # --- Memory ---
     {
         "name": "harmony_memory_save",
@@ -178,13 +165,6 @@ def _handle_pipeline_respond(arguments: dict) -> str:
     )
 
 
-def _handle_generate_template(arguments: dict) -> str:
-    from harmony.orchestrator.templates import generate_template
-    return generate_template(
-        template_name=arguments["template_name"],
-        config_json=arguments["config_json"],
-    )
-
 
 def _handle_memory_save(arguments: dict) -> str:
     _validate_agent_role(arguments["agent_role"])
@@ -238,8 +218,7 @@ _TOOL_HANDLERS: dict[str, Callable[[dict], str]] = {
     "harmony_pipeline_start": _handle_pipeline_start,
     "harmony_pipeline_next": _handle_pipeline_next,
     "harmony_pipeline_respond": _handle_pipeline_respond,
-    "harmony_generate_template": _handle_generate_template,
-    "harmony_memory_save": _handle_memory_save,
+"harmony_memory_save": _handle_memory_save,
     "harmony_memory_load": _handle_memory_load,
     "harmony_checkpoint_save": _handle_checkpoint_save,
 }

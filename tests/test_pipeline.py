@@ -572,22 +572,6 @@ class TestBuildFlow:
         loaded = SessionState.load(state_path)
         assert loaded.tasks[0].status != "completed"
 
-    def test_escalation_skip_goes_to_verify(self, state_path):
-        state = SessionState(session_id="test", pipeline_phase="build", pipeline_step="escalate_1")
-        state.save(state_path)
-
-        result = json.loads(pipeline_respond("b", state_path))
-        loaded = SessionState.load(state_path)
-        assert loaded.pipeline_phase == "verify"
-
-    def test_escalation_abort(self, state_path):
-        state = SessionState(session_id="test", pipeline_phase="build", pipeline_step="escalate_1")
-        state.save(state_path)
-
-        result = json.loads(pipeline_respond("d", state_path))
-        loaded = SessionState.load(state_path)
-        assert loaded.pipeline_phase == "done"
-
     def test_fix_success_triggers_quality_gate(self, state_path):
         state = SessionState(session_id="test", pipeline_phase="build",
                              tasks=[TaskState(id="1", title="Auth", status="in_progress")])

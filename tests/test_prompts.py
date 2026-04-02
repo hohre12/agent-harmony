@@ -60,10 +60,6 @@ class TestPromptLength:
         issues = [{"severity": "MUST-FIX", "file": "auth.ts", "what": "missing validation"}]
         self._check_length(prompts.fix_issues("1", issues), "fix_issues")
 
-    def test_escalation(self):
-        issues = [{"what": "test failure"}]
-        self._check_length(prompts.escalation("Auth", issues), "escalation")
-
     def test_final_check(self):
         self._check_length(prompts.final_check(), "final_check")
 

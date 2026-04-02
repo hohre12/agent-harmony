@@ -1,4 +1,4 @@
-"""Build phase prompts — task execution, fix, escalation."""
+"""Build phase prompts — task execution, fix."""
 
 from __future__ import annotations
 
@@ -77,22 +77,3 @@ def fix_issues(task_id: str, issues: list[dict]) -> str:
     )
 
 
-def escalation(task_title: str, issues: list[dict], scores: dict | None = None) -> str:
-    issue_text = "\n".join(f"- {i.get('what', '?')}" for i in issues[:5])
-    score_text = ""
-    if scores:
-        score_text = "\nQuality scores:\n" + "\n".join(
-            f"  {k}: {v}" for k, v in scores.items()
-        ) + "\n"
-    return (
-        f'Task "{task_title}" is not passing quality checks.\n\n'
-        f"Issues:\n{issue_text}\n"
-        f"{score_text}\n"
-        "You MUST call the AskUserQuestion tool to present these choices:\n"
-        "  a) Show details — I'll fix manually\n"
-        "  b) Skip this task\n"
-        "  c) Try a different approach\n"
-        "  d) Abort\n"
-        "  → Recommended: c)\n\n"
-        "Interpret their answer and call harmony_pipeline_respond with the letter (a/b/c/d)."
-    )

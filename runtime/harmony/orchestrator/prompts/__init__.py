@@ -3,7 +3,7 @@
 Split by domain to keep each file short and focused:
   interview.py  — interview questions, PRD generation/review
   setup.py      — project init, agent gen, build refs, task gen
-  build.py      — task execution, fix issues, escalation
+  build.py      — task execution, fix issues
   quality.py    — quality gate, production audit
   security.py   — security review, hardening
   delivery.py   — verify, final check, summary, resume
@@ -24,7 +24,6 @@ from harmony.orchestrator.prompts.setup import (
 from harmony.orchestrator.prompts.build import (
     build_task,
     fix_issues,
-    escalation,
 )
 from harmony.orchestrator.prompts.quality import (
     quality_gate,
@@ -50,7 +49,7 @@ from harmony.orchestrator.prompts.design import (
 __all__ = [
     "interview_start", "interview_question", "generate_prd", "prd_review", "resolve_answer",
     "setup_step", "generate_tasks", "setup_team_executor",
-    "build_task", "fix_issues", "escalation",
+    "build_task", "fix_issues",
     "quality_gate", "production_audit",
     "harden_security_review", "harden_fix_criticals",
     "verify_prd_compliance", "verify_fix_gaps",
