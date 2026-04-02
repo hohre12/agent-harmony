@@ -607,9 +607,9 @@ class TestBuildFlow:
                              checkpoint="files: a.py, b.py, c.py")],
         )
         state.save(state_path)
-        # Trigger build phase by sending a generic step
+        # Trigger build phase by sending an empty step (resume picks up in-progress task)
         result = json.loads(pipeline_next(
-            json.dumps({"step": "continue"}), state_path,
+            json.dumps({"step": ""}), state_path,
         ))
         assert result["step"] == "build_task"
         assert "RESUME FROM CHECKPOINT" in result["prompt"]

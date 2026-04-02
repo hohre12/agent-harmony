@@ -64,6 +64,15 @@ def _handle_build(state: SessionState, data: dict, is_user_input: bool = False) 
     handler = dispatch.get(step)
     if handler:
         return handler(state, data)
+    # Unrecognized step — warn and continue to next task
+    if step:
+        return make_response(
+            step="build_task",
+            prompt=f"Warning: unrecognized build step '{step}'. Continuing to next task.\n\n"
+                   "If you just completed a task, call harmony_pipeline_next with the correct step value "
+                   "(build_task, quality_gate, audit, design_audit, or fix).",
+            expect="step_result",
+        )
     return _next_build_task(state)
 
 
@@ -129,9 +138,15 @@ def _handle_quality_gate(state: SessionState, data: dict) -> dict:
     unverified = verification.get("unverified", [])
     critical_unverified = [m for m in unverified if m in ("build", "tests", "lint", "test_coverage")]
     if critical_unverified:
+        # Include specific error details from verification if available
+        error_hints = []
+        for key in ("_test_error", "_lint_error"):
+            hint = verification.get(key, "")
+            if hint:
+                error_hints.append(hint)
+        hint_text = " ".join(error_hints) if error_hints else "Install the project's test/lint tools and re-run."
         issues = [{"severity": "MUST-FIX", "file": "quality gate",
-                    "what": f"Critical metrics {critical_unverified} could not be verified server-side. "
-                            "Install the project's test runner (pytest/jest) and re-run."}]
+                    "what": f"Critical metrics {critical_unverified} could not be verified server-side. {hint_text}"}]
         return _build_fix_or_escalate(state, task_id, task_title, issues, scores)
 
     # Use server-measured values where available (trust actual over reported)

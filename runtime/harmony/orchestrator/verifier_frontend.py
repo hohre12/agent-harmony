@@ -108,9 +108,11 @@ def _verify_node_project(cwd: str) -> dict:
 def _verify_python_project(cwd: str) -> dict:
     """Run Python build/test/lint commands."""
     from pathlib import Path as P
+    from harmony.orchestrator.verifier import _git_changed_files
     results: dict = {}
-    # Syntax check changed files
-    code_check, files_out = run_cmd(["git", "diff", "--name-only", "--diff-filter=ACMR", "HEAD~1"], cwd=cwd)
+    # Syntax check changed files (uses merge-base for accuracy)
+    files_out = _git_changed_files(cwd)
+    code_check = 0 if files_out.strip() else 1
     build_ok = True
     if code_check == 0:
         for f in files_out.strip().split("\n"):
@@ -121,8 +123,8 @@ def _verify_python_project(cwd: str) -> dict:
                     build_ok = False
                     break
     results["build"] = build_ok
-    code, out = run_cmd(["python3", "-m", "pytest", "--tb=no", "-q", "--co"], cwd=cwd, timeout=30)
-    if code == 0:
+    code_collect, out_collect = run_cmd(["python3", "-m", "pytest", "--tb=no", "-q", "--co"], cwd=cwd, timeout=30)
+    if code_collect == 0:
         code, out = run_cmd(["python3", "-m", "pytest", "--tb=short", "-q", "--cov", "--cov-report=term-missing"], cwd=cwd, timeout=120)
         results["tests"] = code == 0
         for line in out.split("\n"):
@@ -136,8 +138,17 @@ def _verify_python_project(cwd: str) -> dict:
                             results["test_coverage"] = val
                     except ValueError:
                         continue
+    elif code_collect == -1:
+        # pytest not installed
+        results["_test_error"] = "pytest not installed — install with: pip install pytest pytest-cov"
+    else:
+        # pytest installed but test collection failed (import errors, syntax errors, etc.)
+        results["tests"] = False
+        results["_test_error"] = f"Test collection failed (exit {code_collect}): {out_collect[:200]}"
     code, out = run_cmd(["python3", "-m", "flake8", "--count", "--statistics"], cwd=cwd, timeout=30)
-    if code != -1:
+    if code == -1:
+        results["_lint_error"] = "flake8 not installed — install with: pip install flake8"
+    else:
         results["lint"] = code == 0
     return results
 
@@ -280,11 +291,15 @@ def cross_verify_quality_scores(reported: dict, cwd: str = ".") -> dict:
     if not evidence["has_changes"]:
         warnings.append("No git changes detected — build may not have produced code")
 
+    # Pass through error details from build/test verification
+    error_details = {k: v for k, v in bt_result.items() if k.startswith("_")}
+
     return {
         "verified": len(mismatches) == 0,
         "mismatches": mismatches,
         "actual": actual,
         "warnings": warnings,
         "unverified": unverified,
+        **error_details,
         "build_evidence": evidence,
     }
