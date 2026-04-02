@@ -26,3 +26,9 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Claude Code local
+.claude/settings.local.json
+
+# Playwright MCP
+.playwright-mcp/
