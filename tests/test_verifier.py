@@ -10,6 +10,7 @@ import pytest
 from harmony.orchestrator.verifier import (
     run_cmd,
     verify_build_evidence,
+    verify_design_doc,
     verify_file_sizes,
     verify_function_sizes,
     verify_prd_sections,
@@ -986,3 +987,107 @@ class TestCrossVerifyQualityScores:
         from harmony.orchestrator.verifier_frontend import cross_verify_quality_scores
         result = cross_verify_quality_scores({"max_file_lines": 2}, cwd=str(tmp_path))
         assert result["verified"]
+
+
+# ---------------------------------------------------------------------------
+# Design document verification
+# ---------------------------------------------------------------------------
+
+def _build_good_design_doc(task_id: str = "2") -> str:
+    """Build a design doc that passes all quality checks."""
+    lines = [
+        f"# Task {task_id}: Feature X — Design Document\n",
+        "## 1. Overview\n",
+        "Feature description here with enough detail.",
+        "Dependencies on previous tasks.",
+        "High-level flow description.",
+        "",
+        "### Data Flow",
+        "```",
+        "Input -> Process -> Output",
+        "```\n",
+        "## 2. API Design\n",
+        "### Endpoints",
+        "- GET /api/v1/items — list items",
+        "- POST /api/v1/items — create item",
+        "```json",
+        '{"id": "string", "title": "string"}',
+        "```\n",
+        "## 3. Data Model\n",
+        "```sql",
+        "CREATE TABLE items (id SERIAL PRIMARY KEY, title TEXT);",
+        "```\n",
+        "## 4. Implementation File List\n",
+        f"- Subtask {task_id}.1: src/routes/items.py",
+        f"- Subtask {task_id}.2: src/models/items.py",
+        f"- Subtask {task_id}.3: tests/test_items.py\n",
+        "## 5. Key Decisions\n",
+        "- Use PostgreSQL for JSONB support",
+        "- REST over GraphQL for simplicity\n",
+        "## 6. Build Sequence\n",
+        "1. Data model first",
+        "2. API routes",
+        "3. Tests",
+    ]
+    # Pad to exceed minimum line count
+    lines.extend([f"# Detail line {i}" for i in range(50)])
+    return "\n".join(lines)
+
+
+class TestVerifyDesignDoc:
+    def test_no_tasks_dir(self, tmp_path):
+        result = verify_design_doc("1", cwd=str(tmp_path))
+        assert not result["valid"]
+        assert not result["exists"]
+
+    def test_no_doc_found(self, tmp_path):
+        (tmp_path / "docs" / "tasks").mkdir(parents=True)
+        result = verify_design_doc("99", cwd=str(tmp_path))
+        assert not result["valid"]
+        assert not result["exists"]
+
+    def test_good_design_doc_passes(self, tmp_path):
+        tasks_dir = tmp_path / "docs" / "tasks"
+        tasks_dir.mkdir(parents=True)
+        doc = tasks_dir / "abc-2-feature-x-plan.md"
+        doc.write_text(_build_good_design_doc("2"))
+        result = verify_design_doc("2", cwd=str(tmp_path))
+        assert result["valid"], f"Issues: {result.get('issues')}"
+        assert result["exists"]
+        assert result["line_count"] >= 80
+
+    def test_too_short_fails(self, tmp_path):
+        tasks_dir = tmp_path / "docs" / "tasks"
+        tasks_dir.mkdir(parents=True)
+        doc = tasks_dir / "abc-3-short-plan.md"
+        doc.write_text("# Task 3\n\nToo short.\n")
+        result = verify_design_doc("3", cwd=str(tmp_path))
+        assert not result["valid"]
+        assert any("minimum" in i.lower() for i in result["issues"])
+
+    def test_missing_required_sections(self, tmp_path):
+        tasks_dir = tmp_path / "docs" / "tasks"
+        tasks_dir.mkdir(parents=True)
+        doc = tasks_dir / "abc-4-missing-plan.md"
+        # Long enough but missing required sections
+        content = "# Task 4\n\n" + "\n".join([f"Line {i}" for i in range(100)])
+        doc.write_text(content)
+        result = verify_design_doc("4", cwd=str(tmp_path))
+        assert not result["valid"]
+        assert any("Overview" in i for i in result["issues"])
+
+    def test_no_code_blocks_fails(self, tmp_path):
+        tasks_dir = tmp_path / "docs" / "tasks"
+        tasks_dir.mkdir(parents=True)
+        # Has sections but no code blocks
+        content = (
+            "# Task 5 Design\n\n## 1. Overview\nDesc\n\n"
+            "## Implementation File List\nfiles\n\n"
+            "## Build Sequence\nsteps\n\n"
+            "## API Design\nendpoints\n\n"
+        ) + "\n".join([f"Detail {i}" for i in range(80)])
+        doc = tasks_dir / "abc-5-no-code-plan.md"
+        doc.write_text(content)
+        result = verify_design_doc("5", cwd=str(tmp_path))
+        assert not result["valid"]
+        assert any("code block" in i.lower() for i in result["issues"])

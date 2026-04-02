@@ -428,6 +428,81 @@ def verify_function_sizes(cwd: str = ".") -> dict:
     }
 
 
+def verify_design_doc(task_id: str, cwd: str = ".") -> dict:
+    """Verify that a task's design document meets minimum quality standards.
+
+    Checks: existence, minimum line count, required sections, code blocks.
+    Returns dict with valid=True/False and details.
+    """
+    cwd = _safe_cwd(cwd)
+    # Find design doc by glob pattern: docs/tasks/*-{task_id}-*-plan.md
+    task_dir = Path(cwd) / "docs" / "tasks"
+    if not task_dir.exists():
+        return {"valid": False, "exists": False, "issues": ["docs/tasks/ directory not found"]}
+
+    matches = list(task_dir.glob(f"*-{task_id}-*-plan.md"))
+    if not matches:
+        return {"valid": False, "exists": False, "issues": [f"No design doc found for task {task_id}"]}
+
+    doc_path = matches[0]
+    content = doc_path.read_text(encoding="utf-8", errors="ignore")
+    lines = content.splitlines()
+    line_count = len(lines)
+    content_lower = content.lower()
+    issues: list[str] = []
+
+    # 1. Minimum line count
+    min_lines = 80
+    if line_count < min_lines:
+        issues.append(
+            f"Design doc is only {line_count} lines — minimum {min_lines} expected. "
+            "Use TeamCreate + architect agents to write a thorough design doc."
+        )
+
+    # 2. Required sections
+    required_sections = [
+        ("overview", "Overview"),
+        ("implementation file list", "Implementation File List"),
+        ("build sequence", "Build Sequence"),
+    ]
+    # At least one of these should exist
+    optional_sections = [
+        ("api design", "API Design"),
+        ("data model", "Data Model"),
+        ("key decision", "Key Decisions"),
+    ]
+    for keyword, label in required_sections:
+        if keyword not in content_lower:
+            issues.append(f"Missing required section: {label}")
+
+    has_optional = any(kw in content_lower for kw, _ in optional_sections)
+    if not has_optional:
+        issues.append(
+            "Missing domain sections — need at least one of: API Design, Data Model, Key Decisions"
+        )
+
+    # 3. Code blocks (architecture diagrams, schemas, file lists)
+    has_code_blocks = "```" in content
+    if not has_code_blocks:
+        issues.append("No code blocks found — expected schemas, file structures, or code examples")
+
+    # 4. Subtask coverage — doc should reference subtask IDs or mention subtask count
+    subtask_refs = len(re.findall(rf'{task_id}\.\d+', content))
+    if subtask_refs == 0:
+        # Also check for "subtask" or "sub-task" mentions
+        if "subtask" not in content_lower and "sub-task" not in content_lower:
+            issues.append("Design doc does not reference subtask IDs — each subtask should be addressed")
+
+    return {
+        "valid": len(issues) == 0,
+        "exists": True,
+        "file": str(doc_path.relative_to(cwd)),
+        "line_count": line_count,
+        "has_code_blocks": has_code_blocks,
+        "issues": issues,
+    }
+
+
 def verify_files_exist(paths: list[str], cwd: str = ".") -> dict:
     """Check that expected output files exist."""
     missing = []

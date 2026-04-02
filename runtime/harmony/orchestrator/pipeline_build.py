@@ -82,6 +82,24 @@ def _handle_build_task(state: SessionState, data: dict) -> dict:
     task_id = data.get("task_id", "")
     task_title = data.get("task_title", "")
     if data.get("success"):
+        # Verify design doc quality BEFORE checking code
+        design_check = verifier.verify_design_doc(task_id, cwd=_PROJECT_CWD)
+        if design_check.get("exists") and not design_check.get("valid"):
+            design_issues = "; ".join(design_check.get("issues", []))
+            return make_response(
+                step="build_task",
+                prompt=(
+                    f"Design document quality check FAILED for task {task_id}: \"{task_title}\"\n\n"
+                    f"Issues: {design_issues}\n\n"
+                    "The design document must be written by architect agents via TeamCreate, "
+                    "NOT directly by the main session. Re-run /agent-harmony:team-executor and "
+                    "ensure Step 3 (Team Creation and Design) spawns architect agents.\n\n"
+                    f"Call harmony_pipeline_next with:\n"
+                    f'{{"step":"build_task","task_id":"{task_id}","task_title":"{task_title}","success":true}}'
+                ),
+                expect="step_result",
+                metadata={"task_id": task_id, "task_title": task_title},
+            )
         # Verify that code was actually written
         evidence = verifier.verify_build_evidence(cwd=_PROJECT_CWD)
         if not evidence["has_changes"]:
