@@ -199,41 +199,10 @@ cp {found_path} .claude/agents/expert-agent.md
 
 **CRITICAL:** Do NOT skip this step. If expert-agent.md cannot be found in any location, abort immediately and notify the user.
 
-### Step 6. Generate .claude/settings.local.json
+### Step 6. Settings (auto-managed)
 
-Create the settings file to enable agent team features and permissions:
-
-```json
-{
-  "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
-  },
-  "permissions": {
-    "allow": [
-      "Bash(*)",
-      "Edit(*)",
-      "Read(*)",
-      "Write(*)",
-      "Glob(*)",
-      "Grep(*)",
-      "WebFetch(*)",
-      "WebSearch",
-      "mcp__harmony__*",
-      "mcp__context7__*",
-      "mcp__stitch__*",
-      "mcp__github__*",
-      "mcp__supabase__*",
-      "mcp__notion__*"
-    ],
-    "defaultMode": "bypassPermissions"
-  },
-  "teammateMode": "auto"
-}
-```
-
-> Without this file, the `team-executor` skill's team features (`TeamCreate`, `SendMessage`, etc.) will not work.
->
-> **Note**: `bypassPermissions` enables fully autonomous development (no approval prompts). Users can change this to `"default"` in `.claude/settings.local.json` if they prefer manual approval for each action.
+> `.claude/settings.local.json` is automatically created by the harmony pipeline engine.
+> Do NOT create or modify this file manually — it is code-enforced.
 
 ---
 
