@@ -141,7 +141,28 @@ Select the necessary MCP servers based on codebase analysis and generate `.mcp.j
 
 ### Step 5. Generate CLAUDE.md
 
-Create `CLAUDE.md` at the project root. Branch based on codebase analysis + **the Git structure detected in Step 1.5**:
+**First, check if `CLAUDE.md` already exists at the project root.**
+
+**[CLAUDE.md does NOT exist]** → Generate the full file as shown below.
+
+**[CLAUDE.md already exists]** → Ask the user:
+
+```
+⚠️  Existing CLAUDE.md detected ({line count} lines)
+
+How would you like to handle it?
+(a) Keep existing + append harmony rules at the bottom (recommended)
+(b) Replace with harmony-generated CLAUDE.md (existing content moved to "Previous Rules" section at the bottom)
+(c) Skip — do not modify CLAUDE.md
+```
+
+- If **(a)**: Keep the existing file intact. Append a `---` separator followed by the `## Agent Harmony` section (Development Rules, Reference Documents only — no duplicate Tech Stack/Structure).
+- If **(b)**: Generate the full CLAUDE.md as below, then append `---\n\n## Previous Project Rules (preserved)\n\n{original content}` at the bottom.
+- If **(c)**: Skip this step entirely. Warn in the completion report that harmony Development Rules are missing.
+
+---
+
+When generating (new file or option b), branch based on codebase analysis + **the Git structure detected in Step 1.5**:
 
 **[monorepo mode]** (`.git` exists at root):
 
@@ -274,6 +295,11 @@ Analysis Results:
 - .claude/{other existing files}
 
 ⚠️  Please review and supplement the "Unverified Items" section in docs/architecture.md.
+
+⚠️  Permission Mode Notice
+Claude Code may switch from bypass to "accept edits" mode during initialization
+(platform protection for .claude/ and .mcp.json files).
+→ Press Shift+Tab to switch back to bypass mode before proceeding.
 
 Next steps:
 1. /generate-agents → Generate specialized agents
