@@ -16,7 +16,7 @@ class TestProtocol:
         resp = handle_message({"jsonrpc": "2.0", "method": "initialize", "params": {}, "id": 1})
         assert resp["id"] == 1
         assert resp["result"]["serverInfo"]["name"] == "agent-harmony"
-        assert resp["result"]["serverInfo"]["version"] == "1.0.0"
+        assert resp["result"]["serverInfo"]["version"] == "1.0.1"
 
     def test_tools_list(self):
         resp = handle_message({"jsonrpc": "2.0", "method": "tools/list", "id": 2})

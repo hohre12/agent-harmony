@@ -20,8 +20,9 @@ ISSUES.md
 .DS_Store
 Thumbs.db
 
-# Test cache
+# Test cache and temp dirs
 .pytest_cache/
+test_*/
 
 # IDE
 .vscode/
