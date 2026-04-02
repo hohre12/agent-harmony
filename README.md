@@ -227,4 +227,4 @@ Open source. MIT License.
 
 ## Version
 
-4.0.0
+1.0.0

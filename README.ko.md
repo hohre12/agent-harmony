@@ -201,4 +201,4 @@ git clone https://github.com/hohre12/agent-harmony ~/.claude/plugins/agent-harmo
 
 ## 버전
 
-4.0.0
+1.0.0
