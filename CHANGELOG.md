@@ -2,6 +2,34 @@
 
 All notable changes to Agent Harmony will be documented in this file.
 
+## [1.0.5] - 2026-04-03
+
+### Added
+
+- **3-phase team execution enforcement** — build_task split into build_team_setup → build_team_execute → build_team_merge
+  - Phase 1: Server verifies design doc written by architect agents
+  - Phase 2: Server verifies worktree branches exist (proof of agent spawning)
+  - Phase 3: Server verifies build evidence after review and merge
+  - Main session is structurally enforced as orchestrator — cannot bypass agent spawning
+- **Worktree branch verification** (`verify_team_execution`) — checks git branches matching `feature/{tag}-{task_id}*/wt-*`
+- **Orchestrator role notice** — every build prompt explicitly states main session must not write code directly
+- **Design philosophy document** (`docs/DESIGN_PHILOSOPHY.md`) — trust problem, harness engineering principles, 7 core design principles
+
+### Fixed
+
+- Substring false positive in branch matching (`wt-1` incorrectly matching `wt-11`) — now uses segment-based matching
+- `lstrip("* ")` replaced with `removeprefix("* ")` for correct branch name parsing
+- Git command failure in `verify_team_execution` now returns explicit error instead of misleading "no branches"
+- `_handle_team_merge` missing task validation — added `_safe_get_task` call
+- Stale step names in unrecognized-step warning — added 3 new phase names
+- `_lang_framework_block` missing "Do NOT use Vanilla HTML/CSS/JS" constraint
+- `build_task` inline code duplication — now uses shared `_subtask_block`/`_team_block` helpers
+- Harness engineering attribution — credited to Martin Fowler/OpenAI, not self-coined
+
+### Changed
+
+- README (EN/KO) revamped — problem-first framing, build loop diagrams, 3-tier quality gate tables
+
 ## [1.0.4] - 2026-04-03
 
 ### Added

@@ -22,10 +22,10 @@ class TestVersioning:
 
         pyproject_version = re.search(r'^version\s*=\s*"([^"]+)"', pyproject, re.MULTILINE)
         assert pyproject_version is not None
-        assert pyproject_version.group(1) == "1.0.4"
-        assert plugin["version"] == "1.0.4"
-        assert harmony.__version__ == "1.0.4"
-        assert "## [1.0.4]" in changelog
+        assert pyproject_version.group(1) == "1.0.5"
+        assert plugin["version"] == "1.0.5"
+        assert harmony.__version__ == "1.0.5"
+        assert "## [1.0.5]" in changelog
 
 
 class TestPublicDocs:
