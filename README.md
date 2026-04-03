@@ -1,39 +1,44 @@
 # Agent Harmony
 
-**One prompt. A few choices. Then sit back.**
+### The AI that writes your code shouldn't be the one reviewing it.
+
+Claude Code writes code in one pass — no review, no audit, no quality gate. It works. But would you ship code that no one else has looked at?
+
+**Harmony adds what's missing: independent review, server-verified quality gates, and a full development pipeline — from requirements to production.**
 
 ```
-You: /agent-harmony:harmony I want to build a SaaS dashboard with auth and billing
+You: /harmony build a SaaS dashboard with auth and billing
 
-Harmony: asks 5-7 smart questions (multiple choice — just pick letters)
-Harmony: generates a 600+ line PRD
-Harmony: assembles a specialized agent team
-Harmony: builds, tests, reviews, audits — task by task
-Harmony: "All 23 tasks complete. Here's your project."
-
-You: approved 3 times. Wrote 0 lines of code.
+Harmony: asks 8 targeted questions (just pick a/b/c)
+Harmony: writes a 200+ line PRD with data models and API contracts
+Harmony: assembles a specialized 5-agent team for YOUR tech stack
+Harmony: builds → tests → audits → fixes — per task, automatically
+Harmony: "12 tasks complete. 87% coverage. 0 security issues. Here's your project."
 ```
 
-[한국어 README](README.ko.md)
+> **You approved 3 times. Wrote 0 lines of code. Every line was independently audited.**
+
+[한국어 README](README.ko.md)  ·  [Design Philosophy](docs/DESIGN_PHILOSOPHY.md)
 
 ---
 
-> Don't lose context. Don't micromanage agents. Don't review every file.
-> **Harmony does it all. You just approve.**
+## Why This Exists
+
+Every AI coding tool has the same blind spot: **the AI grades its own homework.**
+
+It writes the code, runs the tests, and says "done." But who verified the tests are meaningful? Who checked the auth doesn't leak? Who confirmed the error handling works?
+
+Harmony fixes this with three structural guarantees:
+
+| Problem | How Harmony Solves It |
+|---------|----------------------|
+| Writer reviews own code | **Separate auditor** — fresh agent, zero shared context |
+| Agent says "tests pass" | **Server cross-verifies** — runs coverage tool independently |
+| Quality is "suggested" | **Code-enforced gates** — can't proceed without meeting thresholds |
+
+This isn't prompt engineering. It's **harness engineering** — making it structurally difficult to produce low-quality output. [Read the full philosophy →](docs/DESIGN_PHILOSOPHY.md)
 
 ---
-
-## The Problem
-
-Claude Code is powerful. But alone, it writes code in one pass — no review, no audit, no quality gate. The result works, but it's fragile.
-
-Agent Harmony adds what's missing: **the entire development process**.
-
-| | Passes | Review | Quality |
-|---|---|---|---|
-| Claude Code alone | 1 | None | Works, but fragile |
-| Claude Code + you reviewing | 3-5 | Manual | Production-grade |
-| **Claude Code + Harmony** | **5+** | **Automated** | **Production-grade, hands-free** |
 
 ## Quick Start
 
@@ -41,105 +46,133 @@ Agent Harmony adds what's missing: **the entire development process**.
 /plugin marketplace add hohre12/jwbae-plugins
 /plugin install agent-harmony@jwbae-plugins
 
-# Official plugin command
-/agent-harmony:harmony a real-time chat app with rooms, auth, and file sharing
-
-# Shorthand that works in many installed environments after plugin install
+# Then just:
 /harmony a real-time chat app with rooms, auth, and file sharing
 ```
 
-That's the public installation path: marketplace → plugin install → run Harmony.
+No `pip install`. Python runtime bootstraps automatically on first run.
+
+---
 
 ## What Happens After You Hit Enter
 
 ```
-Phase 1 — Interview                        You answer a few multiple-choice questions
-Phase 2 — PRD Generation                   Comprehensive spec, auto-generated
-Phase 3 — Setup (automatic)                Agent team + tasks + reference docs
-Phase 4 — Build (fully automatic)          For each task:
-                                             design → implement → self-review
-                                             → quality gate → production audit
-                                             → fix until it passes
-Phase 5 — Delivery                         Production-ready project
+Phase 1 — Interview              You answer 8-12 targeted questions (a/b/c)
+Phase 2 — PRD Generation         200+ line spec with schemas, APIs, acceptance criteria
+Phase 3 — PRD Review             You approve, edit, or restart
+Phase 4 — Setup (automatic)      Agent team + design system + tasks + reference docs
+Phase 5 — Build (automatic)      For each vertical-slice task:
+                                   design doc → multi-agent implementation
+                                   → quality gate (server-verified)
+                                   → independent production audit
+                                   → fix loop until ALL thresholds pass
+Phase 6 — Verify                 Fresh QA agent checks every PRD feature is implemented
+Phase 7 — Harden                 Security review — automated scanners + AI analysis
+Phase 8 — Delivery               Full build + integration test + summary report
 ```
 
-**You interact most in Phase 1.** After that, Harmony runs the pipeline and only comes back when it needs approval, explicit manual override, or an abort decision.
+**You interact in Phases 1-3.** After that, Harmony runs autonomously and only pauses when it genuinely needs your input.
 
-## Harness Engineering
+---
 
-Prompt engineering asks nicely. **Harness engineering gives automation the best shot at its highest-quality output.**
+## Quality Gates — Code-Enforced, Not Prompt-Suggested
 
-Every step in the pipeline is a constraint — not a suggestion.
+Metrics are measured by the server, not self-reported by agents.
+
+| Metric | Prototype | MVP | Production |
+|--------|-----------|-----|------------|
+| Build passes | Required | Required | Required |
+| All tests pass | Required | Required | Required |
+| Zero lint errors | Required | Required | Required |
+| Test coverage | >= 50% | >= 70% | >= 80% |
+| Max file size | 600 lines | 400 lines | 350 lines |
+| Max function size | 80 lines | 60 lines | 50 lines |
+| Security criticals | 0 | 0 | 0 |
+| A11y criticals | 0 | 0 | 0 |
+
+The stage is set during the interview. "Prototype" is lenient. "Production" is strict. There is no "skip" button.
+
+---
+
+## Multi-Agent Team
+
+Harmony doesn't use one agent for everything. It creates a **project-specific team** based on your tech stack:
 
 ```
- 1. PRD Generation
-    Agents can't build without clear requirements.
-    600+ line spec generated from your interview — not a vague brief.
-
- 2. Dynamic Agent Team (project-scoped, not shared globally)
-    Specialized agents created FOR your project's tech stack and domains.
-    A FastAPI project gets different agents than a Next.js project.
-    Agents are scoped to your project only — no cross-project contamination.
-
- 3. Expert Reference Docs (anti-hallucination)
-    Each agent receives verified domain knowledge documents.
-    Agents work from facts, not from training data memory.
-
- 4. Accountability Pressure
-    Every agent knows: a different agent will blindly judge your work
-    with zero context about your intentions. This changes first-pass quality.
-
-  5. Server-Cross-Checked Verification
-     Build, test, lint, coverage — cross-checked outside the working agent where measurable.
-     Agents cannot quietly hand-wave measurable quality signals.
-
-  6. Infinite Quality Loop (with user-approved takeover checkpoints)
-     Fails audit? → fix → re-audit. Repeat.
-     After repeated failures, Harmony pauses so you can keep retrying, take over manually, or abort.
+┌─────────────────────────────────────────────────────┐
+│  Main Architect — system design, coordination       │
+│  Code Architect — design docs, code structure       │
+│  DB Agent — schema, migrations, query optimization  │
+│  Review Agent — independent code audit              │
+│  E2E Agent — integration testing                    │
+│  + Domain specialists (frontend, backend, etc.)     │
+└─────────────────────────────────────────────────────┘
 ```
 
-Harmony keeps automatic retries running by default. To control token/cost spend, it pauses after repeated failures and lets you choose: continue retrying, manual override, or abort.
+A FastAPI project gets different agents than a Next.js project. Agents work in **parallel worktrees**, merge through review, and are scoped to your project only.
 
-Manual override ends Harmony's automatic verification loop. From that point on, the user takes direct responsibility for the outcome.
+Each agent receives domain-specific reference documents — verified knowledge, not training-data hallucination.
 
-### Quality Thresholds
+---
 
-Code-enforced. Not prompt-suggested.
+## The Build Loop (Per Task)
 
-| Metric | Requirement | Measured by |
-|--------|-------------|-------------|
-| Build | Must pass | Actual build command |
-| Tests | Must pass | Full test suite |
-| Lint | Zero errors | Project linter |
-| Coverage | >= 70% | pytest --cov / jest --coverage |
-| File size | <= 400 lines | wc -l |
-| Function size | <= 60 lines | AST / brace counting |
-| Security | 0 critical | bandit / npm audit + secret scan |
+This is where the real value is. For every task:
+
+```
+  ┌──────────────┐
+  │  Team builds  │  Design doc → concurrent implementation → self-review
+  └──────┬───────┘
+         ▼
+  ┌──────────────┐
+  │ Quality gate  │  Server measures: build, tests, lint, coverage, security
+  └──────┬───────┘
+         ▼ pass
+  ┌──────────────┐
+  │  Cold audit   │  Fresh agent. No shared context. Reads only code + PRD.
+  └──────┬───────┘
+         ▼ pass
+  ┌──────────────┐
+  │   Complete    │
+  └──────────────┘
+
+  Any failure → fix → loop back. No round limit.
+  Escalates to you every 5 rounds for: retry / take over / abort.
+```
+
+**Accountability pressure**: Every agent knows a different agent will blindly judge its work. This changes first-pass quality.
+
+---
 
 ## What Gets Generated
 
 ```
 your-project/
-├── docs/prd.md                    # 600+ line PRD from your conversation
-├── .claude/agents/                # Specialized agent team for YOUR project
-├── .claude/skills/team-executor/  # Task execution workflow
-├── .harmony/state.json            # Pipeline state (auto-managed)
-├── CLAUDE.md                      # Project rules
-├── src/                           # Your actual project code
+├── docs/
+│   ├── prd.md                     # Full PRD from your interview
+│   ├── refs/                      # Domain reference docs (anti-hallucination)
+│   └── tasks/                     # Design docs per task
+├── .claude/agents/                # Your project's specialized agent team
+├── .harmony/state.json            # Pipeline state (resumable, git-tracked)
+├── CLAUDE.md                      # Project conventions
+├── src/                           # Your actual code
 └── tests/                         # With real coverage
 ```
 
+---
+
 ## Session Resilience
 
-Session crashed? Rate limited? Just run it again.
+Rate limited? Laptop closed? Session crashed? Just run it again.
 
 ```bash
-/agent-harmony:harmony
 /harmony
-# → "Resume from task 15/23? (a) Resume (b) Start over"
+# → "Resume from task 8/12? (a) Resume  (b) Start over  (c) Status"
 ```
 
-State is saved after every step. Nothing is lost.
+State is saved after **every step** with atomic writes. The state file is git-tracked — you can resume on a different machine.
+
+---
 
 ## Best Fit
 
@@ -147,43 +180,44 @@ State is saved after every step. Nothing is lost.
 |-----------|-----|
 | Web apps (Next.js, FastAPI, Django) | Predictable structure, clear agent roles |
 | API servers | Standard patterns, highly testable |
-| CLI tools | Simple structure, few agents needed |
-| SaaS MVPs | Interview captures requirements well |
+| CLI tools | Simple structure, fast pipeline |
+| SaaS MVPs | Interview captures requirements precisely |
 
-| Less ideal | Why |
-|-----------|-----|
-| Large existing codebases | Too many implicit dependencies to capture |
-| ML/data pipelines | Experimental workflow vs linear tasks |
-| Real-time systems | Integration testing is hard to automate |
+| Less ideal for | Why |
+|----------------|-----|
+| Large existing codebases (50k+ lines) | Too many implicit dependencies |
+| ML / data pipelines | Experimental workflow doesn't fit linear tasks |
+| Hardware / embedded | Integration testing can't be automated easily |
+
+---
 
 ## Commands
 
-| Command | What it does |
+| Command | Description |
 |---------|-------------|
-| `/agent-harmony:harmony [idea]` | **The one command.** Idea → production-ready project |
-| `/harmony [idea]` | Shorthand used in many installed environments after plugin install |
-| `/project-init` | Initialize project structure (used internally) |
-| `/codebase-init` | Initialize from existing codebase |
+| `/harmony [idea]` | **The one command.** Idea → production-ready project |
+| `/agent-harmony:harmony [idea]` | Fully qualified name (always works) |
+
+Internal commands (used by the pipeline):
+
+| Command | Description |
+|---------|-------------|
+| `/project-init` | Scaffold new project |
+| `/codebase-init` | Initialize from existing code |
 | `/generate-agents` | Create specialized agent team |
 | `/build-refs` | Generate domain reference docs |
+
+---
 
 ## Known Behavior
 
 ### Permission Mode During Setup
 
-During `/project-init` or `/codebase-init`, Claude Code may switch from bypass to "accept edits" mode. This is a [platform-level protection](https://code.claude.com/docs/en/permission-modes.md) for `.claude/` and `.mcp.json` files.
+During project initialization, Claude Code may switch from bypass to "accept edits" mode — this is a [platform-level protection](https://code.claude.com/docs/en/permission-modes.md) for `.claude/` and `.mcp.json` files.
 
-**This only happens once, during initial setup.** Press `Shift+Tab` to switch back to bypass mode after initialization.
+**Happens once.** Press `Shift+Tab` to return to bypass mode after initialization.
 
-## Installation
-
-```bash
-# Public installation path: add marketplace → install plugin
-/plugin marketplace add hohre12/jwbae-plugins
-/plugin install agent-harmony@jwbae-plugins
-```
-
-No `pip install` needed. Python runtime bootstraps automatically on first use.
+---
 
 ## Requirements
 
@@ -191,6 +225,13 @@ No `pip install` needed. Python runtime bootstraps automatically on first use.
 - Python 3.10+ (auto-bootstrapped)
 - git
 - macOS or Linux (Windows via WSL)
+
+## Installation
+
+```bash
+/plugin marketplace add hohre12/jwbae-plugins
+/plugin install agent-harmony@jwbae-plugins
+```
 
 ## License
 
