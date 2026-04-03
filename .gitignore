@@ -97,3 +97,5 @@ test_persistence0/
 test_save_creates_backup0/
 test_audit_nonce_persists0/
 test_subtasks_persist_save_loa0/
+test_build_task_missing_design0/
+test_build_task_shallow_design0/
