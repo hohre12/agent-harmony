@@ -2,6 +2,22 @@
 
 All notable changes to Agent Harmony will be documented in this file.
 
+## [1.0.4] - 2026-04-03
+
+### Added
+
+- **Project-context-aware production audit** — audit agent reads PRD + refs + CLAUDE.md before reviewing
+  - 9 audit categories (A-I): Bugs, Code Quality, Architecture, Business Logic, Database, API, Frontend/UX, Tests, Performance
+  - Categories auto-skipped when not applicable to the project
+  - Per-category verdict required, not just overall PASS/FAIL
+  - Domain-specific checks: state machine transitions, schema quality, UX flow for target user
+- **Auto-detect project linter** — server prefers ruff over flake8, npm run lint over eslint
+- **Server-detected violations mandatory** — audit agent must address each or explain why false positive
+
+### Fixed
+
+- Lint verification always ran flake8 even when project uses ruff (caused 5+ retry loops)
+
 ## [1.0.3] - 2026-04-03
 
 ### Added

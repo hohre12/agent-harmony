@@ -259,7 +259,7 @@ def handle_message(message: dict) -> dict | None:
             "result": {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "agent-harmony", "version": "1.0.3"},
+                "serverInfo": {"name": "agent-harmony", "version": "1.0.4"},
             },
         }
 
