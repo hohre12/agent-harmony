@@ -107,13 +107,22 @@ def _verify_node_project(cwd: str) -> dict:
                         break
                 except ValueError:
                     continue
-    code, out = run_cmd(["npx", "eslint", ".", "--format", "json", "--max-warnings", "99999"], cwd=cwd, timeout=60)
-    try:
-        lint_data = json.loads(out)
-        error_count = sum(f.get("errorCount", 0) for f in lint_data)
-        results["lint"] = error_count == 0
-    except (json.JSONDecodeError, TypeError):
-        pass
+    # Auto-detect lint: prefer project's own lint script, fall back to eslint
+    lint_script_code, _ = run_cmd(["npm", "run", "lint", "--if-present"], cwd=cwd, timeout=60)
+    if lint_script_code == 0:
+        results["lint"] = True
+    elif lint_script_code != -1:
+        # lint script exists but failed
+        results["lint"] = False
+    else:
+        # No lint script — try eslint directly
+        code, out = run_cmd(["npx", "eslint", ".", "--format", "json", "--max-warnings", "99999"], cwd=cwd, timeout=60)
+        try:
+            lint_data = json.loads(out)
+            error_count = sum(f.get("errorCount", 0) for f in lint_data)
+            results["lint"] = error_count == 0
+        except (json.JSONDecodeError, TypeError):
+            pass
     return results
 
 
@@ -157,11 +166,18 @@ def _verify_python_project(cwd: str) -> dict:
         # pytest installed but test collection failed (import errors, syntax errors, etc.)
         results["tests"] = False
         results["_test_error"] = f"Test collection failed (exit {code_collect}): {out_collect[:200]}"
-    code, out = run_cmd(["python3", "-m", "flake8", "--count", "--statistics"], cwd=cwd, timeout=30)
-    if code == -1:
-        results["_lint_error"] = "flake8 not installed — install with: pip install flake8"
+    # Auto-detect linter: prefer ruff (modern, fast), fall back to flake8
+    ruff_code, ruff_out = run_cmd(["python3", "-m", "ruff", "check", "."], cwd=cwd, timeout=30)
+    if ruff_code != -1:
+        # ruff is available — use it
+        results["lint"] = ruff_code == 0
     else:
-        results["lint"] = code == 0
+        # Fall back to flake8
+        code, out = run_cmd(["python3", "-m", "flake8", "--count", "--statistics"], cwd=cwd, timeout=30)
+        if code == -1:
+            results["_lint_error"] = "No linter found — install ruff or flake8"
+        else:
+            results["lint"] = code == 0
     return results
 
 
