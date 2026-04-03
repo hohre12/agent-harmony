@@ -133,6 +133,13 @@ class TestUnusedImports:
         result = vcq.verify_unused_imports(sources)
         assert result["violation_count"] == 0
 
+    def test_python_future_annotations_skipped(self):
+        """from __future__ import annotations is a special import — never flag it."""
+        sources = {"app.py": "from __future__ import annotations\nx: int = 1\n"}
+        result = vcq.verify_unused_imports(sources)
+        names = [v["import_name"] for v in result["violations"]]
+        assert "annotations" not in names
+
     def test_python_all_export(self):
         sources = {"app.py": "import os\n__all__ = ['os']\n"}
         result = vcq.verify_unused_imports(sources)

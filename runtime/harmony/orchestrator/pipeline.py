@@ -142,6 +142,12 @@ def _handle_resume(state: SessionState, data: dict) -> dict:
     answer = data.get("user_input", "").strip().lower()
     if answer in ("a", "resume"):
         state.pipeline_step = ""
+        # Refresh quality thresholds from current plugin version
+        # (fixes stale thresholds when plugin is upgraded mid-session)
+        from harmony.orchestrator.state import thresholds_for_stage
+        stage = state.interview_context.get("project_stage", "").lower()
+        if stage:
+            state.quality_thresholds = thresholds_for_stage(stage)
         return _resume_to_current_step(state)
     if answer in ("b", "start over"):
         import uuid

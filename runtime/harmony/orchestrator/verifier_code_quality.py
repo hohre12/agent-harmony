@@ -255,6 +255,9 @@ def _unused_imports_python(filepath: str, source: str) -> list[dict]:
                 if node.lineno not in noqa_lines:
                     imports.append((name, node.lineno, f"import {alias.name}"))
         elif isinstance(node, ast.ImportFrom):
+            # Skip __future__ imports — they change runtime behavior, not used as names
+            if node.module == "__future__":
+                continue
             if node.module and "TYPE_CHECKING" in source[: source.find("\n", 0) * 5 if "\n" in source else len(source)]:
                 # Rough check — skip TYPE_CHECKING block imports
                 pass
