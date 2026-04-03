@@ -137,7 +137,10 @@ This is where the real value is. For every task:
   └──────────────┘
 
   Any failure → fix → loop back. No round limit.
-  Escalates to you every 5 rounds for: retry / take over / abort.
+  Escalates to you every 5 rounds for: retry / manual takeover / abort.
+
+Harmony keeps automatic retries running by default. To control cost,
+it pauses after repeated failures so you can choose what to do next.
 ```
 
 **Accountability pressure**: Every agent knows a different agent will blindly judge its work. This changes first-pass quality.

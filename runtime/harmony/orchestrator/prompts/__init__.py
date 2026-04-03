@@ -23,6 +23,9 @@ from harmony.orchestrator.prompts.setup import (
 )
 from harmony.orchestrator.prompts.build import (
     build_task,
+    build_team_setup,
+    build_team_execute,
+    build_team_merge,
     fix_issues,
 )
 from harmony.orchestrator.prompts.quality import (
@@ -49,7 +52,7 @@ from harmony.orchestrator.prompts.design import (
 __all__ = [
     "interview_start", "interview_question", "generate_prd", "prd_review", "resolve_answer",
     "setup_step", "generate_tasks", "setup_team_executor",
-    "build_task", "fix_issues",
+    "build_task", "build_team_setup", "build_team_execute", "build_team_merge", "fix_issues",
     "quality_gate", "production_audit",
     "harden_security_review", "harden_fix_criticals",
     "verify_prd_compliance", "verify_fix_gaps",

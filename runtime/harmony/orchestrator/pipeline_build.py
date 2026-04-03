@@ -56,7 +56,10 @@ def _handle_build(state: SessionState, data: dict, is_user_input: bool = False) 
         return _next_build_task(state)
 
     dispatch = {
-        "build_task": _handle_build_task,
+        "build_task": _handle_build_task,  # backwards compat for existing sessions
+        "build_team_setup": _handle_team_setup,
+        "build_team_execute": _handle_team_execute,
+        "build_team_merge": _handle_team_merge,
         "quality_gate": _handle_quality_gate,
         "audit": _handle_audit,
         "design_audit": _handle_design_audit,
@@ -71,18 +74,17 @@ def _handle_build(state: SessionState, data: dict, is_user_input: bool = False) 
             step="build_task",
             prompt=f"Warning: unrecognized build step '{step}'. Continuing to next task.\n\n"
                    "If you just completed a task, call harmony_pipeline_next with the correct step value "
-                   "(build_task, quality_gate, audit, design_audit, or fix).",
+                   "(build_team_setup, build_team_execute, build_team_merge, quality_gate, audit, design_audit, or fix).",
             expect="step_result",
         )
     return _next_build_task(state)
 
 
 def _handle_build_task(state: SessionState, data: dict) -> dict:
-    """Handle build_task step result."""
+    """Handle legacy build_task step result (backwards compat for existing sessions)."""
     task_id = data.get("task_id", "")
     task_title = data.get("task_title", "")
     if data.get("success"):
-        # Verify design doc exists and meets quality standards
         design_check = verifier.verify_design_doc(task_id, cwd=_PROJECT_CWD)
         if not design_check.get("valid"):
             design_issues = "; ".join(design_check.get("issues", []))
@@ -100,15 +102,13 @@ def _handle_build_task(state: SessionState, data: dict) -> dict:
                 expect="step_result",
                 metadata={"task_id": task_id, "task_title": task_title},
             )
-        # Verify that code was actually written
         evidence = verifier.verify_build_evidence(cwd=_PROJECT_CWD)
         if not evidence["has_changes"]:
             return make_response(
                 step="build_task",
                 prompt=(
                     f"Build evidence check FAILED for task {task_id}: \"{task_title}\"\n\n"
-                    "No git changes detected. The team-executor must produce actual code changes.\n"
-                    "Re-run the task and ensure code is written and committed.\n\n"
+                    "No git changes detected. Re-run the task.\n\n"
                     f"Call harmony_pipeline_next with:\n"
                     f'{{"step":"build_task","task_id":"{task_id}","task_title":"{task_title}","success":true}}'
                 ),
@@ -124,6 +124,151 @@ def _handle_build_task(state: SessionState, data: dict) -> dict:
         )
     else:
         return _build_fix_or_escalate(state, task_id, task_title, data.get("issues", []))
+
+
+# ---- 3-phase team execution handlers ------------------------------------ #
+
+
+def _handle_team_setup(state: SessionState, data: dict) -> dict:
+    """Phase 1/3: Team created, design doc written by architect agents."""
+    task_id = data.get("task_id", "")
+    task_title = data.get("task_title", "")
+    tag = state.session_id[:8] if state.session_id else "v1"
+    tcfg = state.team_config or None
+    plang = state.interview_context.get("project_language", "")
+    ffw = state.interview_context.get("frontend_framework", "")
+
+    if not data.get("success"):
+        return _build_fix_or_escalate(state, task_id, task_title, data.get("issues", []))
+
+    # Verify design doc exists and meets quality standards
+    design_check = verifier.verify_design_doc(task_id, cwd=_PROJECT_CWD)
+    if not design_check.get("valid"):
+        design_issues = "; ".join(design_check.get("issues", []))
+        return make_response(
+            step="build_team_setup",
+            prompt=(
+                f"Design document check FAILED for task {task_id}: \"{task_title}\"\n\n"
+                f"Issues: {design_issues}\n\n"
+                "The design document MUST be written by architect agents — not by you directly.\n"
+                "Spawn architect agents via TeamCreate and let THEM write it.\n\n"
+                f"Call harmony_pipeline_next with:\n"
+                f'{{"step":"build_team_setup","task_id":"{task_id}","task_title":"{task_title}",'
+                f'"team_name":"{data.get("team_name", "")}","success":true}}'
+            ),
+            expect="step_result",
+            metadata={"task_id": task_id, "task_title": task_title},
+        )
+
+    # Design doc verified → move to Phase 2: Implementation
+    task, err = _safe_get_task(state, task_id, step_name="build_team_setup")
+    if err:
+        return err
+    assert task is not None
+    state.pipeline_step = f"team_execute_{task_id}"
+    subtask_dicts = [asdict(st) for st in task.subtasks] if task.subtasks else None
+
+    return make_response(
+        step="build_team_execute",
+        prompt=prompts.build_team_execute(
+            task_id, task_title, tag=tag,
+            subtasks=subtask_dicts, team_config=tcfg,
+            thresholds=state.quality_thresholds,
+            project_language=plang, frontend_framework=ffw,
+        ),
+        expect="step_result",
+        metadata={"task_id": task_id, "task_title": task_title},
+    )
+
+
+def _handle_team_execute(state: SessionState, data: dict) -> dict:
+    """Phase 2/3: Implementation agents completed work in worktrees."""
+    task_id = data.get("task_id", "")
+    task_title = data.get("task_title", "")
+    tag = state.session_id[:8] if state.session_id else "v1"
+    tcfg = state.team_config or None
+
+    if not data.get("success"):
+        return _build_fix_or_escalate(state, task_id, task_title, data.get("issues", []))
+
+    # Verify worktree branches exist — proof that agents were actually spawned
+    task, err = _safe_get_task(state, task_id, step_name="build_team_execute")
+    if err:
+        return err
+    assert task is not None
+    subtask_ids = [st.id for st in task.subtasks] if task.subtasks else []
+    subtask_dicts = [asdict(st) for st in task.subtasks] if task.subtasks else None
+
+    team_check = verifier.verify_team_execution(task_id, tag, subtask_ids, cwd=_PROJECT_CWD)
+    if not team_check.get("valid"):
+        team_issues = "; ".join(team_check.get("issues", []))
+        return make_response(
+            step="build_team_execute",
+            prompt=(
+                f"Team execution check FAILED for task {task_id}: \"{task_title}\"\n\n"
+                f"Issues: {team_issues}\n\n"
+                "You are the ORCHESTRATOR. You must create worktrees and spawn\n"
+                "implementation agents — do NOT write code directly.\n\n"
+                f"Call harmony_pipeline_next with:\n"
+                f'{{"step":"build_team_execute","task_id":"{task_id}","task_title":"{task_title}","success":true}}'
+            ),
+            expect="step_result",
+            metadata={"task_id": task_id, "task_title": task_title,
+                       "team_check": team_check},
+        )
+
+    # Worktree branches verified → move to Phase 3: Merge
+    state.pipeline_step = f"team_merge_{task_id}"
+    return make_response(
+        step="build_team_merge",
+        prompt=prompts.build_team_merge(
+            task_id, task_title, tag=tag,
+            subtasks=subtask_dicts, team_config=tcfg,
+        ),
+        expect="step_result",
+        metadata={"task_id": task_id, "task_title": task_title},
+    )
+
+
+def _handle_team_merge(state: SessionState, data: dict) -> dict:
+    """Phase 3/3: Review done, worktrees merged, code committed."""
+    task_id = data.get("task_id", "")
+    task_title = data.get("task_title", "")
+    task, err = _safe_get_task(state, task_id, step_name="build_team_merge")
+    if err:
+        return err
+    assert task is not None
+    # Backfill title from state if agent omitted it
+    if not task_title:
+        task_title = task.title
+
+    if not data.get("success"):
+        return _build_fix_or_escalate(state, task_id, task_title, data.get("issues", []))
+
+    # Verify that code was actually committed
+    evidence = verifier.verify_build_evidence(cwd=_PROJECT_CWD)
+    if not evidence["has_changes"]:
+        return make_response(
+            step="build_team_merge",
+            prompt=(
+                f"Build evidence check FAILED for task {task_id}: \"{task_title}\"\n\n"
+                "No git changes detected after merge. Ensure worktrees are merged "
+                "and changes are committed.\n\n"
+                f"Call harmony_pipeline_next with:\n"
+                f'{{"step":"build_team_merge","task_id":"{task_id}","task_title":"{task_title}","success":true}}'
+            ),
+            expect="step_result",
+            metadata={"task_id": task_id, "task_title": task_title},
+        )
+
+    # All 3 phases done → proceed to quality gate
+    state.pipeline_step = f"gate_{task_id}"
+    return make_response(
+        step="quality_gate",
+        prompt=prompts.quality_gate(task_id, task_title, state.quality_thresholds),
+        expect="step_result",
+        metadata={"task_id": task_id, "task_title": task_title},
+    )
 
 
 def _handle_quality_gate(state: SessionState, data: dict) -> dict:
@@ -430,23 +575,9 @@ def _next_build_task(state: SessionState) -> dict:
                     metadata={"task_id": t.id, "task_title": t.title},
                 )
             else:
-                # No checkpoint — reset to pending (full restart)
+                # No checkpoint — reset to pending so it enters the 3-phase team flow
                 t.status = "pending"
-                # Notify via metadata so the user sees which task restarted
-                return make_response(
-                    step="build_task",
-                    prompt=(
-                        f"⚠ Task {t.id} (\"{t.title}\") had no checkpoint — restarting from scratch.\n\n"
-                        + prompts.build_task(
-                            t.id, t.title, tag=tag, progress=f"Task (restarting)/{len(state.tasks)}",
-                            subtasks=[asdict(st) for st in t.subtasks] if t.subtasks else None,
-                            team_config=tcfg, thresholds=state.quality_thresholds, project_language=plang,
-                            frontend_framework=ffw,
-                        )
-                    ),
-                    expect="step_result",
-                    metadata={"task_id": t.id, "task_title": t.title, "restarted": True},
-                )
+                break  # Will be picked up by next_pending_task() below
 
     task = state.next_pending_task()
     if task is not None:
@@ -454,7 +585,7 @@ def _next_build_task(state: SessionState) -> dict:
         total = len(state.tasks)
         progress = f"Task {completed + 1}/{total}"
         state.mark_in_progress(task.id)
-        state.pipeline_step = f"task_{task.id}"
+        state.pipeline_step = f"team_setup_{task.id}"
         subtask_dicts = [asdict(st) for st in task.subtasks] if task.subtasks else None
 
         # Context management: suggest /compact at task boundaries
@@ -469,22 +600,14 @@ def _next_build_task(state: SessionState) -> dict:
                 "--- END CONTEXT MANAGEMENT ---\n\n"
             )
 
-        # Pre-flight: check if a PREVIOUS task left a bad design doc
-        # (This catches design docs written after implementation on prior runs)
-        design_check = verifier.verify_design_doc(task.id, cwd=_PROJECT_CWD)
-        design_warning = ""
-        if design_check.get("exists") and not design_check.get("valid"):
-            design_issues = "; ".join(design_check.get("issues", []))
-            design_warning = (
-                f"⚠ DESIGN DOC QUALITY WARNING for task {task.id}:\n"
-                f"Issues: {design_issues}\n"
-                "The design doc MUST be written by architect agents via TeamCreate "
-                "(Step 3) BEFORE implementation begins. Fix the design doc first.\n\n"
-            )
-
         return make_response(
-            step="build_task",
-            prompt=compact_hint + design_warning + prompts.build_task(task.id, task.title, tag=tag, progress=progress, subtasks=subtask_dicts, team_config=tcfg, thresholds=state.quality_thresholds, project_language=plang, frontend_framework=ffw),
+            step="build_team_setup",
+            prompt=compact_hint + prompts.build_team_setup(
+                task.id, task.title, tag=tag, progress=progress,
+                subtasks=subtask_dicts, team_config=tcfg,
+                thresholds=state.quality_thresholds,
+                project_language=plang, frontend_framework=ffw,
+            ),
             expect="step_result",
             metadata={"task_id": task.id, "task_title": task.title, "suggest_compact": completed >= 2},
         )

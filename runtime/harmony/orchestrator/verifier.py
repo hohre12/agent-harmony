@@ -503,6 +503,67 @@ def verify_design_doc(task_id: str, cwd: str = ".") -> dict:
     }
 
 
+def verify_team_execution(task_id: str, tag: str, subtask_ids: list[str], cwd: str = ".") -> dict:
+    """Verify that implementation agents used worktree branches.
+
+    Checks for branches matching the pattern:
+      feature/{tag}-{task_id}*/wt-{subtask_id}/*
+
+    Returns valid=True only if at least one worktree branch exists per subtask
+    and each branch has actual code changes.
+    """
+    cwd = _safe_cwd(cwd)
+    if not subtask_ids:
+        return {"valid": True, "issues": [], "branches_found": [], "expected": subtask_ids}
+
+    # Find all worktree branches for this task
+    pattern = f"feature/{tag}-{task_id}*/wt-*"
+    code, out = run_cmd(["git", "branch", "--list", pattern], cwd=cwd)
+    if code != 0:
+        return {
+            "valid": False,
+            "issues": [f"git branch --list failed (exit {code}): {out[:200]}"],
+            "branches_found": [],
+            "expected": subtask_ids,
+        }
+    branches = [b.strip().removeprefix("* ") for b in out.strip().split("\n") if b.strip()]
+
+    if not branches:
+        return {
+            "valid": False,
+            "issues": [
+                f"No worktree branches found matching '{pattern}'. "
+                "You MUST create worktrees and spawn implementation agents — "
+                "do NOT implement code directly in the main session."
+            ],
+            "branches_found": [],
+            "expected": subtask_ids,
+        }
+
+    # Check which subtask IDs have corresponding branches.
+    # Use segment-based matching to avoid false positives (wt-1 matching wt-11).
+    missing_subtasks = []
+    for st_id in subtask_ids:
+        has_branch = any(f"/wt-{st_id}/" in b for b in branches)
+        if not has_branch:
+            missing_subtasks.append(st_id)
+
+    issues = []
+    if missing_subtasks:
+        issues.append(
+            f"Missing worktree branches for subtasks: {missing_subtasks}. "
+            "Each subtask must have a dedicated worktree branch with its own agent."
+        )
+
+    return {
+        "valid": len(issues) == 0,
+        "branches_found": branches,
+        "missing_subtasks": missing_subtasks,
+        "expected": subtask_ids,
+        "issues": issues,
+    }
+
+
 def verify_files_exist(paths: list[str], cwd: str = ".") -> dict:
     """Check that expected output files exist."""
     missing = []

@@ -10,7 +10,7 @@ import pytest
 
 from harmony.orchestrator.pipeline import start_pipeline, pipeline_next, pipeline_respond
 from harmony.orchestrator.pipeline_setup import ensure_settings_local
-from harmony.orchestrator.state import SessionState, TaskState
+from harmony.orchestrator.state import SessionState, TaskState, SubtaskState
 
 
 @pytest.fixture
@@ -68,6 +68,14 @@ def _mock_task_structure_valid(*args, **kwargs):
 
 def _mock_task_structure_invalid(*args, **kwargs):
     return {"valid": False, "issues": ["Task 1: no subtasks defined"], "task_count": 2}
+
+
+def _mock_team_execution_valid(*args, **kwargs):
+    return {"valid": True, "branches_found": ["feature/test-1_Auth/wt-1.1/user"], "missing_subtasks": [], "issues": []}
+
+
+def _mock_team_execution_invalid(*args, **kwargs):
+    return {"valid": False, "branches_found": [], "missing_subtasks": ["1.1"], "issues": ["No worktree branches found"]}
 
 
 class TestStartPipeline:
@@ -398,7 +406,7 @@ class TestBuildFlow:
             json.dumps({"step": "", "success": True}),
             state_path,
         ))
-        assert result["step"] == "build_task"
+        assert result["step"] == "build_team_setup"
         # Task 2 should be picked up (was reset from in_progress to pending)
         assert result["metadata"]["task_id"] == "2"
 
@@ -453,6 +461,113 @@ class TestBuildFlow:
         ))
         assert result["step"] == "build_task"
         assert "Design document check FAILED" in result["prompt"]
+
+    # --- 3-phase team execution tests ---
+
+    @patch("harmony.orchestrator.pipeline_build.verifier.verify_design_doc", _mock_design_doc_valid)
+    def test_team_setup_success_triggers_team_execute(self, state_path):
+        """Phase 1 success (design doc verified) → Phase 2 (implementation)."""
+        state = SessionState(
+            session_id="test", pipeline_phase="build",
+            tasks=[TaskState(
+                id="1", title="Auth", status="in_progress",
+                subtasks=[SubtaskState(id="1.1", title="DB schema", assigned_agent="db-agent")],
+            )],
+        )
+        state.save(state_path)
+        result = json.loads(pipeline_next(
+            json.dumps({"step": "build_team_setup", "task_id": "1", "task_title": "Auth",
+                         "team_name": "team-test-1", "success": True}),
+            state_path,
+        ))
+        assert result["step"] == "build_team_execute"
+        assert "ORCHESTRATOR" in result["prompt"]
+
+    @patch("harmony.orchestrator.pipeline_build.verifier.verify_design_doc", _mock_design_doc_missing)
+    def test_team_setup_missing_design_doc_rejected(self, state_path):
+        """Phase 1 without design doc is rejected."""
+        state = SessionState(
+            session_id="test", pipeline_phase="build",
+            tasks=[TaskState(id="1", title="Auth", status="in_progress")],
+        )
+        state.save(state_path)
+        result = json.loads(pipeline_next(
+            json.dumps({"step": "build_team_setup", "task_id": "1", "task_title": "Auth",
+                         "team_name": "team-test-1", "success": True}),
+            state_path,
+        ))
+        assert result["step"] == "build_team_setup"
+        assert "Design document check FAILED" in result["prompt"]
+
+    @patch("harmony.orchestrator.pipeline_build.verifier.verify_team_execution", _mock_team_execution_valid)
+    def test_team_execute_success_triggers_team_merge(self, state_path):
+        """Phase 2 success (worktree branches verified) → Phase 3 (merge)."""
+        state = SessionState(
+            session_id="test", pipeline_phase="build",
+            tasks=[TaskState(
+                id="1", title="Auth", status="in_progress",
+                subtasks=[SubtaskState(id="1.1", title="DB schema", assigned_agent="db-agent")],
+            )],
+        )
+        state.save(state_path)
+        result = json.loads(pipeline_next(
+            json.dumps({"step": "build_team_execute", "task_id": "1", "task_title": "Auth",
+                         "success": True}),
+            state_path,
+        ))
+        assert result["step"] == "build_team_merge"
+        assert "Review & Merge" in result["prompt"]
+
+    @patch("harmony.orchestrator.pipeline_build.verifier.verify_team_execution", _mock_team_execution_invalid)
+    def test_team_execute_no_worktrees_rejected(self, state_path):
+        """Phase 2 without worktree branches is rejected."""
+        state = SessionState(
+            session_id="test", pipeline_phase="build",
+            tasks=[TaskState(
+                id="1", title="Auth", status="in_progress",
+                subtasks=[SubtaskState(id="1.1", title="DB schema", assigned_agent="db-agent")],
+            )],
+        )
+        state.save(state_path)
+        result = json.loads(pipeline_next(
+            json.dumps({"step": "build_team_execute", "task_id": "1", "task_title": "Auth",
+                         "success": True}),
+            state_path,
+        ))
+        assert result["step"] == "build_team_execute"
+        assert "Team execution check FAILED" in result["prompt"]
+        assert "ORCHESTRATOR" in result["prompt"]
+
+    @patch("harmony.orchestrator.pipeline_build.verifier.verify_build_evidence", _mock_build_evidence_ok)
+    def test_team_merge_success_triggers_quality_gate(self, state_path):
+        """Phase 3 success (build evidence) → quality gate."""
+        state = SessionState(
+            session_id="test", pipeline_phase="build",
+            tasks=[TaskState(id="1", title="Auth", status="in_progress")],
+        )
+        state.save(state_path)
+        result = json.loads(pipeline_next(
+            json.dumps({"step": "build_team_merge", "task_id": "1", "task_title": "Auth",
+                         "success": True}),
+            state_path,
+        ))
+        assert result["step"] == "quality_gate"
+
+    @patch("harmony.orchestrator.pipeline_build.verifier.verify_build_evidence", _mock_build_evidence_empty)
+    def test_team_merge_no_evidence_rejected(self, state_path):
+        """Phase 3 without build evidence is rejected."""
+        state = SessionState(
+            session_id="test", pipeline_phase="build",
+            tasks=[TaskState(id="1", title="Auth", status="in_progress")],
+        )
+        state.save(state_path)
+        result = json.loads(pipeline_next(
+            json.dumps({"step": "build_team_merge", "task_id": "1", "task_title": "Auth",
+                         "success": True}),
+            state_path,
+        ))
+        assert result["step"] == "build_team_merge"
+        assert "evidence check FAILED" in result["prompt"]
 
     @patch("harmony.orchestrator.pipeline_build.verifier_frontend.cross_verify_quality_scores", _mock_quality_verified)
     def test_quality_gate_pass_triggers_audit(self, state_path):
@@ -567,7 +682,7 @@ class TestBuildFlow:
                          "audit_nonce": "test-nonce-123", "verdict": "PASS"}),
             state_path,
         ))
-        assert result["step"] == "build_task"
+        assert result["step"] == "build_team_setup"
         loaded = SessionState.load(state_path)
         assert loaded.tasks[0].status == "completed"
 
@@ -849,7 +964,7 @@ class TestResumeFlow:
         )
         state.save(state_path)
         result = json.loads(pipeline_respond("a", state_path))
-        assert result["step"] == "build_task"  # Should resume to build
+        assert result["step"] == "build_team_setup"  # Should resume to build
 
     def test_resume_option_b_starts_over(self, state_path):
         """Verify choosing 'b' during resume resets session."""
@@ -922,7 +1037,7 @@ class TestDesignAudit:
             state_path,
         ))
         # Should go directly to next build task, not design_audit
-        assert result["step"] == "build_task"
+        assert result["step"] == "build_team_setup"
         loaded = SessionState.load(state_path)
         assert loaded.tasks[0].status == "completed"
 
