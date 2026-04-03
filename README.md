@@ -36,7 +36,7 @@ Harmony fixes this with three structural guarantees:
 | Agent says "tests pass" | **Server cross-verifies** — runs coverage tool independently |
 | Quality is "suggested" | **Code-enforced gates** — can't proceed without meeting thresholds |
 
-This isn't prompt engineering. It's **harness engineering** — making it structurally difficult to produce low-quality output. [Read the full philosophy →](docs/DESIGN_PHILOSOPHY.md)
+This isn't prompt engineering. It's [**harness engineering**](https://martinfowler.com/articles/harness-engineering.html) — making it structurally difficult to produce low-quality output. [Read the full philosophy →](docs/DESIGN_PHILOSOPHY.md)
 
 ---
 

@@ -16,7 +16,7 @@ Harmony exists because we believe **AI-generated code deserves the same rigor as
 
 ## Harness Engineering
 
-We coined a term for what Harmony does: **Harness Engineering**.
+Harmony is built on the principle of [**Harness Engineering**](https://martinfowler.com/articles/harness-engineering.html) — the discipline of designing constraints, feedback loops, and verification systems around AI agents.
 
 Prompt engineering asks an AI to do something well. Harness engineering makes it structurally difficult to do something poorly.
 
