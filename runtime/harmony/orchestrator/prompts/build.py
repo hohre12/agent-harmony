@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-def build_task(task_id: str, task_title: str, tag: str = "", checkpoint_step: str = "", checkpoint: str = "", progress: str = "", subtasks: list | None = None, team_config: dict | None = None, thresholds: dict | None = None, project_language: str = "") -> str:
+def build_task(task_id: str, task_title: str, tag: str = "", checkpoint_step: str = "", checkpoint: str = "", progress: str = "", subtasks: list | None = None, team_config: dict | None = None, thresholds: dict | None = None, project_language: str = "", frontend_framework: str = "") -> str:
     tag_display = tag or "v1"
     resume_hint = ""
     if checkpoint_step:
@@ -55,6 +55,10 @@ def build_task(task_id: str, task_title: str, tag: str = "", checkpoint_step: st
     # their output will be independently verified by a blind reviewer.
     accountability_block = _accountability_block(thresholds)
 
+    framework_block = ""
+    if frontend_framework and "skip" not in frontend_framework.lower() and "specified" not in frontend_framework.lower():
+        framework_block = f"\n**Frontend Framework: {frontend_framework}** — All frontend code MUST use this framework. Do NOT use Vanilla HTML/CSS/JS unless this explicitly says so.\n"
+
     lang_block = ""
     if project_language:
         lang_lower = project_language.lower()
@@ -68,6 +72,7 @@ def build_task(task_id: str, task_title: str, tag: str = "", checkpoint_step: st
         f"{resume_hint}"
         f"{subtask_block}"
         f"{team_block}"
+        f"{framework_block}"
         f"{lang_block}\n"
         f"{accountability_block}\n"
         f"**Execution**: Run `/agent-harmony:team-executor {tag_display}:{task_id}`\n\n"

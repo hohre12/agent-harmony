@@ -254,9 +254,10 @@ def generate_prd(context: dict) -> str:
         f"Stack: {context.get('tech_stack', '')}",
         f"Stage: {context.get('project_stage', '')}",
     ]
-    for key in ("auth", "design", "monetization", "deployment", "project_language"):
+    for key in ("frontend_framework", "auth", "design", "monetization", "deployment", "project_language"):
         if context.get(key):
-            ctx_lines.append(f"{key.title()}: {context[key]}")
+            label = "Frontend Framework" if key == "frontend_framework" else key.replace("_", " ").title()
+            ctx_lines.append(f"{label}: {context[key]}")
     context_block = "\n".join(ctx_lines)
 
     # Determine PRD writing language

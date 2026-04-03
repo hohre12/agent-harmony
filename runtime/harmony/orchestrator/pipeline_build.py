@@ -400,6 +400,7 @@ def _next_build_task(state: SessionState) -> dict:
     tag = state.session_id[:8] if state.session_id else "v1"
     tcfg = state.team_config or None
     plang = state.interview_context.get("project_language", "")
+    ffw = state.interview_context.get("frontend_framework", "")
 
     # Check for interrupted tasks with checkpoint data first
     for t in state.tasks:
@@ -423,6 +424,7 @@ def _next_build_task(state: SessionState) -> dict:
                         team_config=tcfg,
                         thresholds=state.quality_thresholds,
                         project_language=plang,
+                        frontend_framework=ffw,
                     ),
                     expect="step_result",
                     metadata={"task_id": t.id, "task_title": t.title},
@@ -439,6 +441,7 @@ def _next_build_task(state: SessionState) -> dict:
                             t.id, t.title, tag=tag, progress=f"Task (restarting)/{len(state.tasks)}",
                             subtasks=[asdict(st) for st in t.subtasks] if t.subtasks else None,
                             team_config=tcfg, thresholds=state.quality_thresholds, project_language=plang,
+                            frontend_framework=ffw,
                         )
                     ),
                     expect="step_result",
@@ -469,7 +472,7 @@ def _next_build_task(state: SessionState) -> dict:
 
         return make_response(
             step="build_task",
-            prompt=design_warning + prompts.build_task(task.id, task.title, tag=tag, progress=progress, subtasks=subtask_dicts, team_config=tcfg, thresholds=state.quality_thresholds, project_language=plang),
+            prompt=design_warning + prompts.build_task(task.id, task.title, tag=tag, progress=progress, subtasks=subtask_dicts, team_config=tcfg, thresholds=state.quality_thresholds, project_language=plang, frontend_framework=ffw),
             expect="step_result",
             metadata={"task_id": task.id, "task_title": task.title},
         )
