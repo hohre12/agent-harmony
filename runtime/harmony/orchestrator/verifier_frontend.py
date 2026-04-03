@@ -16,7 +16,7 @@ from harmony.orchestrator.verifier import (
 
 
 def verify_design_tokens(cwd: str = ".") -> dict:
-    """Grep source files for hardcoded color/spacing values outside design token files."""
+    """Grep changed source files for hardcoded color/spacing values outside design token files."""
     cwd = _safe_cwd(cwd)
     token_file_patterns = {"token", "theme", "design", "palette", "variable", "custom-propert"}
     color_pattern = re.compile(r'(?:^|[\s:,"\'])(?:#[0-9a-fA-F]{3,8}|rgba?\s*\(|hsla?\s*\()', re.MULTILINE)
@@ -26,8 +26,10 @@ def verify_design_tokens(cwd: str = ".") -> dict:
     )
     source_exts = {".tsx", ".jsx", ".vue", ".svelte", ".css", ".scss", ".less"}
     violations: list[dict] = []
-    code, out = run_cmd(["git", "ls-files"], cwd=cwd)
-    if code != 0 or not out.strip():
+    # Only check git-changed files (not entire repo)
+    from harmony.orchestrator.verifier import _git_changed_files
+    out = _git_changed_files(cwd)
+    if not out.strip():
         return {"violation_count": 0, "violations": [], "verified": False}
     for filepath in out.strip().split("\n"):
         filepath = filepath.strip()
@@ -42,10 +44,20 @@ def verify_design_tokens(cwd: str = ".") -> dict:
         try:
             content = p.read_text(encoding="utf-8", errors="ignore")
             for i, line in enumerate(content.splitlines(), 1):
-                if color_pattern.search(line):
-                    violations.append({"file": filepath, "line": i, "type": "color", "content": line.strip()[:100]})
-                if spacing_pattern.search(line):
-                    violations.append({"file": filepath, "line": i, "type": "spacing", "content": line.strip()[:100]})
+                stripped = line.strip()
+                # Skip lines that use var() — these reference design tokens
+                if "var(" in stripped:
+                    continue
+                # Skip CSS custom property definitions (--foo: value)
+                if stripped.startswith("--"):
+                    continue
+                # Skip comments
+                if stripped.startswith("/*") or stripped.startswith("*") or stripped.startswith("//"):
+                    continue
+                if color_pattern.search(stripped):
+                    violations.append({"file": filepath, "line": i, "type": "color", "content": stripped[:100]})
+                if spacing_pattern.search(stripped):
+                    violations.append({"file": filepath, "line": i, "type": "spacing", "content": stripped[:100]})
         except OSError:
             continue
     return {
