@@ -27,6 +27,12 @@ test_*/
 
 # Claude Code local
 .claude/settings.local.json
+.claude/projects/
+
+# Harmony local (state.json is tracked, but backups/memory are local)
+.harmony/*.bak
+.harmony/*.tmp
+.harmony/memory/
 
 # Playwright MCP
 .playwright-mcp/
