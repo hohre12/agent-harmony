@@ -170,8 +170,8 @@ class SessionState:
         self.updated_at = _now_iso()
         p = Path(path)
         p.parent.mkdir(parents=True, exist_ok=True)
-        # Ensure .harmony/ is in .gitignore
-        _ensure_gitignore_entry(p.parent.name)
+        # Gitignore local-only files, but keep state.json tracked for cross-machine resume
+        _ensure_harmony_gitignore(p.parent)
         data = asdict(self)
         content = json.dumps(data, indent=2, ensure_ascii=False)
         # Atomic write: write to temp file, then rename
@@ -431,16 +431,45 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _ensure_gitignore_entry(dirname: str) -> None:
-    """Add dirname to .gitignore if not already present. Non-fatal on error."""
-    entry = f"{dirname}/"
+def _ensure_harmony_gitignore(harmony_dir: Path) -> None:
+    """Ensure .harmony/ local-only files are gitignored, but state.json is tracked.
+
+    Tracked (for cross-machine resume):
+      - .harmony/state.json
+
+    Ignored:
+      - .harmony/state.json.bak  (local backup)
+      - .harmony/state.json.tmp  (atomic write temp)
+      - .harmony/memory/         (agent memory, large + machine-specific)
+    """
+    # Only operate on .harmony directory — skip test temp dirs
+    if harmony_dir.name != ".harmony":
+        return
     gitignore = Path(".gitignore")
+    entries = [
+        f"{harmony_dir.name}/*.bak",
+        f"{harmony_dir.name}/*.tmp",
+        f"{harmony_dir.name}/memory/",
+    ]
     try:
         content = gitignore.read_text(encoding="utf-8") if gitignore.exists() else ""
-        if entry not in content.splitlines():
-            with gitignore.open("a", encoding="utf-8") as f:
-                if content and not content.endswith("\n"):
-                    f.write("\n")
-                f.write(f"{entry}\n")
+        lines = content.splitlines()
+
+        # Remove old blanket .harmony/ entry if present
+        removed_blanket = False
+        dirname_entry = f"{harmony_dir.name}/"
+        if dirname_entry in lines:
+            lines = [l for l in lines if l != dirname_entry]
+            content = "\n".join(lines)
+            if content and not content.endswith("\n"):
+                content += "\n"
+            removed_blanket = True
+
+        to_add = [e for e in entries if e not in lines]
+        if to_add or removed_blanket:
+            with gitignore.open("w", encoding="utf-8") as f:
+                f.write(content)
+                for entry in to_add:
+                    f.write(f"{entry}\n")
     except OSError:
         pass
