@@ -2,6 +2,21 @@
 
 All notable changes to Agent Harmony will be documented in this file.
 
+## [1.0.3] - 2026-04-03
+
+### Added
+
+- **Frontend framework interview question** — asks user to choose React/Vue/Svelte/Vanilla/etc. for projects with a frontend
+- Answer flows through PRD generation and build prompts so agents use the chosen framework
+
+### Fixed
+
+- `from __future__ import annotations` false positive in unused import checker (was 18 false positives per project)
+- Quality thresholds not refreshed on session resume (stale values from older plugin versions persisted)
+- Design token checker scanned entire repo instead of changed files only (caused 204 false positives)
+- Design token checker flagged `var()` lines and CSS custom property definitions as violations
+- `frontend_framework` answer collected but never passed to PRD generation or build prompts
+
 ## [1.0.2] - 2026-04-02
 
 ### Added
