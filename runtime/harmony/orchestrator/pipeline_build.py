@@ -588,28 +588,16 @@ def _next_build_task(state: SessionState) -> dict:
         state.pipeline_step = f"team_setup_{task.id}"
         subtask_dicts = [asdict(st) for st in task.subtasks] if task.subtasks else None
 
-        # Context management: suggest /compact at task boundaries
-        compact_hint = ""
-        if completed >= 2:
-            compact_hint = (
-                "--- CONTEXT MANAGEMENT ---\n"
-                "Before starting the next task, ask the user to run /compact to free context window.\n"
-                "Use the AskUserQuestion tool: \"Context is growing. Run /compact to free memory. "
-                "All pipeline state is saved in .harmony/state.json — nothing is lost.\"\n"
-                "After the user responds, continue with the task below.\n"
-                "--- END CONTEXT MANAGEMENT ---\n\n"
-            )
-
         return make_response(
             step="build_team_setup",
-            prompt=compact_hint + prompts.build_team_setup(
+            prompt=prompts.build_team_setup(
                 task.id, task.title, tag=tag, progress=progress,
                 subtasks=subtask_dicts, team_config=tcfg,
                 thresholds=state.quality_thresholds,
                 project_language=plang, frontend_framework=ffw,
             ),
             expect="step_result",
-            metadata={"task_id": task.id, "task_title": task.title, "suggest_compact": completed >= 2},
+            metadata={"task_id": task.id, "task_title": task.title},
         )
 
     # All tasks done -> verify (PRD compliance check)
