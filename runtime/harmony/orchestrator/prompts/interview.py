@@ -49,6 +49,7 @@ def interview_question(question_id: str, context: dict) -> str:
         "core_problem": _q_core_problem,
         "features": _q_features,
         "tech_stack": _q_tech_stack,
+        "frontend_framework": _q_frontend_framework,
         "project_stage": _q_project_stage,
         "project_language": _q_project_language,
         "design": _q_design,
@@ -132,6 +133,22 @@ def _q_tech_stack(ctx: dict) -> str:
         "  e) Python + Click/Typer (CLI)\n"
         "  f) Other — specify\n\n"
         "  → Recommend based on project type and features."
+        + _RESPOND_HINT
+    )
+
+
+def _q_frontend_framework(ctx: dict) -> str:
+    return (
+        "Ask the user:\n\n"
+        "What frontend technology?\n"
+        "  a) React (Next.js) — recommended for most web apps\n"
+        "  b) Vue (Nuxt) — lightweight alternative\n"
+        "  c) Svelte (SvelteKit) — minimal boilerplate\n"
+        "  d) Vanilla HTML/CSS/JS — no framework, simplest\n"
+        "  e) React Native / Expo — mobile app\n"
+        "  f) Already specified in tech stack — skip\n"
+        "  g) Other — specify\n\n"
+        "  → Recommend based on the tech stack and project complexity."
         + _RESPOND_HINT
     )
 
@@ -411,6 +428,14 @@ CHOICE_MAP: dict[str, dict[str, str]] = {
         "c": "Python + FastAPI + PostgreSQL",
         "d": "React Native + Expo + TypeScript",
         "e": "Python + Click/Typer (CLI)",
+    },
+    "frontend_framework": {
+        "a": "React (Next.js)",
+        "b": "Vue (Nuxt)",
+        "c": "Svelte (SvelteKit)",
+        "d": "Vanilla HTML/CSS/JS",
+        "e": "React Native / Expo",
+        "f": "Already specified in tech stack",
     },
     "project_stage": {
         "a": "Prototype",

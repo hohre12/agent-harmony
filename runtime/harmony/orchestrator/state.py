@@ -372,24 +372,31 @@ class SessionState:
         ctx = self.interview_context
         project_type = ctx.get("project_type", "")
 
-        base = ["target_users", "core_problem", "features", "tech_stack", "project_stage", "project_language"]
+        base = ["target_users", "core_problem", "features", "tech_stack"]
+
+        # Detect frontend from accumulated context
+        tech = ctx.get("tech_stack", "").lower()
+        features = ctx.get("features", "").lower()
+        request = ctx.get("user_request", "").lower()
+        all_text = f"{tech} {features} {request}"
+        frontend_hints = (
+            "react", "next", "vue", "angular", "svelte", "frontend",
+            "dashboard", "대시보드", "ui", "화면", "web", "웹",
+            "html", "css", "tailwind", "page", "페이지",
+        )
+        has_frontend = any(kw in all_text for kw in frontend_hints)
+
+        # Frontend framework question — only for projects with a frontend
+        if has_frontend and project_type not in ("cli", "library"):
+            base.append("frontend_framework")
+
+        base.extend(["project_stage", "project_language"])
 
         # Add conditional questions — skip irrelevant ones for CLI/library
         if project_type not in ("cli", "library", "personal"):
             base.append("design")
-        elif project_type == "personal":
-            # Personal projects still need design if they have a frontend
-            tech = ctx.get("tech_stack", "").lower()
-            features = ctx.get("features", "").lower()
-            request = ctx.get("user_request", "").lower()
-            all_text = f"{tech} {features} {request}"
-            frontend_hints = (
-                "react", "next", "vue", "angular", "svelte", "frontend",
-                "dashboard", "대시보드", "ui", "화면", "web", "웹",
-                "html", "css", "tailwind", "page", "페이지",
-            )
-            if any(kw in all_text for kw in frontend_hints):
-                base.append("design")
+        elif project_type == "personal" and has_frontend:
+            base.append("design")
         if project_type not in ("cli", "library", "api", "personal"):
             base.append("auth")
         if project_type not in ("cli", "personal"):
